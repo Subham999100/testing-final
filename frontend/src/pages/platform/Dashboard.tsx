@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { PlatformService } from '../../services/platform.service';
 import { PlatformDashboardSummary } from '../../types/platform.types';
+import { OrganisationStatusBadge } from '../../features/platform/organisations/OrganisationStatusBadge';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -158,17 +159,7 @@ export const Dashboard: React.FC = () => {
                     <span className="text-slate-400 text-[11px] font-mono">{org.slug} · {org.tier}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                        org.status === 'ACTIVE'
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : org.status === 'SUSPENDED'
-                          ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}
-                    >
-                      {org.status}
-                    </span>
+                    <OrganisationStatusBadge status={org.status} />
                     <span className="text-slate-400 font-mono text-[11px]">
                       {org.tokenBalance} tok
                     </span>

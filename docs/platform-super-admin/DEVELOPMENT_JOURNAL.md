@@ -145,3 +145,67 @@ This document preserves the chronological engineering journal of the Platform Su
 
 ### Notes for Next Developer
 - Refer to `docs/platform-super-admin/NEXT-DEVELOPER-HANDOFF.md` before making architectural modifications.
+
+---
+
+## 2026-09-28 — Shared Platform Admin & Super Admin Modularization
+
+### Implemented
+- Unified Platform Portal architecture: Refactored Platform Super Admin pages to utilize modular, reusable shared feature components (`src/features/platform/*`).
+- Created permission-based access control with `usePermissions()` hook, ensuring dynamic rendering of tables, action buttons, modals, and navigation links.
+- Modularized Organisation features: `OrganisationTable`, `OrganisationFilters`, `OrganisationStatusBadge`, `SuspendOrganisationModal`, and `CreateOrganisationModal`.
+- Modularized Token features: `TokenLedgerTable`, `TokenBalanceTable`, `TokenPlansGrid`, `CreateTokenPlanModal`, and `AdjustTokensModal`.
+- Modularized Admin features: `PlatformAdminTable` and `CreatePlatformAdminModal`.
+- Modularized Analytics features: `AnalyticsCharts` and `GeminiSummaryCard`.
+- Modularized Audit features: `AuditLogsTable` and `AuditInspectModal`.
+- Modularized Security features: `SecurityEventsTable` and `ResolveIncidentModal`.
+- Integrated role switcher simulator in `PlatformHeader` allowing live switching between `PLATFORM_SUPER_ADMIN` and `PLATFORM_ADMIN` to test permission enforcement.
+- Updated `integration-handoff.md` with complete reuse guidelines, permission matrix, and file ownership breakdown.
+
+### Files Changed
+- `frontend/src/features/platform/organisations/*`
+- `frontend/src/features/platform/tokens/*`
+- `frontend/src/features/platform/admins/*`
+- `frontend/src/features/platform/analytics/*`
+- `frontend/src/features/platform/audit/*`
+- `frontend/src/features/platform/security/*`
+- `frontend/src/pages/platform/*`
+- `frontend/src/layouts/platform/*`
+- `frontend/src/hooks/usePermissions.ts`
+- `frontend/src/store/auth.store.ts`
+- `docs/platform-super-admin/integration-handoff.md`
+- `docs/platform-super-admin/DEVELOPMENT_JOURNAL.md`
+
+### Shared Components
+- `OrganisationTable`, `OrganisationFilters`, `OrganisationStatusBadge`, `SuspendOrganisationModal`, `CreateOrganisationModal`
+- `TokenLedgerTable`, `TokenBalanceTable`, `TokenPlansGrid`, `CreateTokenPlanModal`, `AdjustTokensModal`
+- `AnalyticsCharts`, `GeminiSummaryCard`
+- `AuditLogsTable`, `AuditInspectModal`
+- `SecurityEventsTable`, `ResolveIncidentModal`
+
+### Permissions
+- Enforced permission checks for all write and privileged actions (`platform.organisations.create`, `platform.organisations.suspend`, `platform.tokens.manage`, `platform.tokens.adjust`, `platform.security.manage`, `platform.admins.*`).
+
+### Database Changes
+- None (database models and schema already support fine-grained permissions and audit logging).
+
+### API Changes
+- None (reused shared REST contracts under `/api/v1/platform/*`).
+
+### Security Considerations
+- Client-side checks are UX-only; all mutations and data access are verified server-side through `JwtAuthGuard`, `RolesGuard`, and `PermissionsGuard`.
+
+### Integration Points
+- Reusable API client `PlatformService` with unified session handling.
+
+### Testing
+- Backend: 17 Jest tests in 5 suites passing (100%).
+- Frontend: `npm run build` compiled with 0 TypeScript/Vite errors.
+
+### Pending
+- Future Platform Admin developer will add role-specific views and workflows using the shared foundation.
+
+### Notes for Platform Admin Developer
+- All shared UI and services live in `src/features/platform/` and `src/services/platform.service.ts`.
+- Do NOT duplicate organisation, token, analytics, or audit components.
+
