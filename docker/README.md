@@ -81,7 +81,6 @@ Inside Docker, PostgreSQL still runs on port `5432`.
 ## 5. Configure Backend
 
 Copy the environment template:
-
 ```powershell
 Copy-Item .\backend\.env.example .\backend\.env
 ```
