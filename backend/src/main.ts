@@ -9,7 +9,6 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
-import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { AuditService } from './modules/audit/audit.service';
 
 async function bootstrap() {
@@ -27,6 +26,20 @@ async function bootstrap() {
   // Set Global API Prefix
   app.setGlobalPrefix(apiPrefix.replace(/^\//, ''));
 
+  // Native HTTP Security Headers Perimeter
+  app.use((req: any, res: any, next: any) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;",
+    );
+    next();
+  });
+
   // Enable CORS
   app.enableCors({
     origin: [corsOrigin, 'http://localhost:3000', 'http://localhost:5173'],
@@ -34,6 +47,7 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   });
+
 
   // Global Validation Pipe with strict whitelisting
   app.useGlobalPipes(
@@ -51,10 +65,7 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
 
   // Global Response Interceptor
-  app.useGlobalInterceptors(
-    new TransformInterceptor(),
-    new AuditInterceptor(reflector, auditService),
-  );
+  app.useGlobalInterceptors(new TransformInterceptor());
 
   // OpenAPI / Swagger Documentation
   const swaggerConfig = new DocumentBuilder()

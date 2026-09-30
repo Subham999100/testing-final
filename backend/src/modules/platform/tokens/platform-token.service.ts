@@ -133,18 +133,21 @@ export class PlatformTokenService {
   // ------------------------------------------------------------
 
   async adjustTokens(dto: AdjustTokensDto, actor: AuthenticatedUser, ip?: string, ua?: string) {
-    const org = await this.prisma.organisation.findUnique({
-      where: { id: dto.organisationId },
-      include: { tokenBalance: true },
-    });
-
-    if (!org) {
-      throw new NotFoundException(`Organisation with ID ${dto.organisationId} not found`);
-    }
-
     const result = await this.prisma.$transaction(async (tx) => {
-      // Upsert balance record if none exists
-      let currentBalance = org.tokenBalance;
+      // 1. Verify organisation exists inside the transaction boundary
+      const org = await tx.organisation.findUnique({
+        where: { id: dto.organisationId },
+      });
+
+      if (!org) {
+        throw new NotFoundException(`Organisation with ID ${dto.organisationId} not found`);
+      }
+
+      // 2. Safely obtain current balance within the transaction boundary
+      let currentBalance = await tx.organisationTokenBalance.findUnique({
+        where: { organisationId: dto.organisationId },
+      });
+
       if (!currentBalance) {
         currentBalance = await tx.organisationTokenBalance.create({
           data: {
@@ -160,29 +163,30 @@ export class PlatformTokenService {
       const balanceBefore = currentBalance.balance;
       const balanceAfter = balanceBefore + dto.amount;
 
+      // 3. Strictly prevent negative balance underflow
       if (balanceAfter < 0) {
         throw new BadRequestException(
           `Insufficient token balance: cannot deduct ${Math.abs(dto.amount)} tokens from current balance of ${balanceBefore}`,
         );
       }
 
-      // Update balance
+      // 4. Atomically update balance using database increments
       const updatedBalance = await tx.organisationTokenBalance.update({
         where: { organisationId: org.id },
         data: {
-          balance: balanceAfter,
+          balance: { increment: dto.amount },
           allocatedTokens:
             dto.amount > 0
               ? { increment: dto.amount }
-              : currentBalance.allocatedTokens,
+              : undefined,
           consumedTokens:
             dto.amount < 0 && dto.type === TokenTransactionType.CONSUMPTION
               ? { increment: Math.abs(dto.amount) }
-              : currentBalance.consumedTokens,
+              : undefined,
         },
       });
 
-      // Insert immutable transaction ledger entry
+      // 5. Insert immutable transaction ledger entry
       const ledgerEntry = await tx.tokenTransaction.create({
         data: {
           organisationId: org.id,
@@ -200,13 +204,14 @@ export class PlatformTokenService {
       return { updatedBalance, ledgerEntry };
     });
 
+
     await this.auditService.record({
       actorId: actor.userId,
       actorRole: actor.role,
       action: 'TOKEN_ADJUSTMENT_EXECUTED',
       entityType: 'TOKEN_LEDGER',
       entityId: result.ledgerEntry.id,
-      organisationId: org.id,
+      organisationId: dto.organisationId, // org is scoped inside the tx callback; dto.organisationId is the same value
       metadata: {
         type: dto.type,
         amount: dto.amount,

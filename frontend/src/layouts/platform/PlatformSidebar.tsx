@@ -27,7 +27,7 @@ import { useAuthStore } from '../../store/auth.store';
 export const PlatformSidebar: React.FC = () => {
   const location = useLocation();
   const { user, isSuperAdmin, hasPermission } = usePermissions();
-  const { logout, loginAsSuperAdmin, loginAsPlatformAdmin } = useAuthStore();
+  const { logout } = useAuthStore();
 
   const navGroups = [
     {
@@ -176,32 +176,8 @@ export const PlatformSidebar: React.FC = () => {
         })}
       </div>
 
-      {/* Role Switcher in Dev / Session Badge */}
-      <div className="p-3 border-t border-slate-800/80 bg-slate-900/40 space-y-2">
-        {/* Quick Role Toggle to test Platform Admin view vs Super Admin view */}
-        <div className="flex items-center justify-between text-[10px] px-1 text-slate-400">
-          <span>Dev Role Simulator:</span>
-          <div className="flex gap-1 font-mono">
-            <button
-              onClick={loginAsSuperAdmin}
-              className={`px-1.5 py-0.5 rounded ${
-                isSuperAdmin ? 'bg-emerald-500/20 text-emerald-400 font-bold' : 'hover:text-white'
-              }`}
-            >
-              Super
-            </button>
-            <span>/</span>
-            <button
-              onClick={() => loginAsPlatformAdmin()}
-              className={`px-1.5 py-0.5 rounded ${
-                !isSuperAdmin ? 'bg-indigo-500/20 text-indigo-400 font-bold' : 'hover:text-white'
-              }`}
-            >
-              Admin
-            </button>
-          </div>
-        </div>
-
+      {/* Authenticated User Session Badge */}
+      <div className="p-3 border-t border-slate-800/80 bg-slate-900/40">
         <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/50 border border-slate-700/50">
           <div className="flex items-center gap-2.5 overflow-hidden">
             <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-xs shrink-0 border border-indigo-500/30">
