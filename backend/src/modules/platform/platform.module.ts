@@ -8,6 +8,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
 // Controllers
+import { PlatformAuthController } from './auth/platform-auth.controller';
 import { PlatformDashboardController } from './dashboard/platform-dashboard.controller';
 import { PlatformOrganisationController } from './organisations/platform-organisation.controller';
 import { PlatformAdminController } from './admins/platform-admin.controller';
@@ -18,6 +19,7 @@ import { PlatformSecurityController } from './security/platform-security.control
 import { PlatformSettingsController } from './settings/platform-settings.controller';
 
 // Services
+import { PlatformAuthService } from './auth/platform-auth.service';
 import { PlatformDashboardService } from './dashboard/platform-dashboard.service';
 import { PlatformOrganisationService } from './organisations/platform-organisation.service';
 import { PlatformAdminService } from './admins/platform-admin.service';
@@ -36,19 +38,27 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
     ConfigModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>(
-          'JWT_SECRET',
-          'super-secret-jwt-key-replace-in-production-min-32-chars-long',
-        ),
-        signOptions: {
-          expiresIn: configService.get<string>('JWT_EXPIRES_IN', '1d'),
-        },
-      }),
+      useFactory: async (configService: ConfigService) => {
+        const secret =
+          configService.get<string>('jwt.secret') ||
+          configService.get<string>('JWT_SECRET');
+
+        if (!secret) {
+          throw new Error('FATAL: JWT secret is required for JwtModule');
+        }
+
+        return {
+          secret,
+          signOptions: {
+            expiresIn: configService.get<string>('jwt.expiresIn') || configService.get<string>('JWT_EXPIRES_IN', '1d'),
+          },
+        };
+      },
       inject: [ConfigService],
     }),
   ],
   controllers: [
+    PlatformAuthController,
     PlatformDashboardController,
     PlatformOrganisationController,
     PlatformAdminController,
@@ -59,6 +69,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
     PlatformSettingsController,
   ],
   providers: [
+    PlatformAuthService,
     PlatformDashboardService,
     PlatformOrganisationService,
     PlatformAdminService,
@@ -71,9 +82,11 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
     PermissionsGuard,
   ],
   exports: [
+    PlatformAuthService,
     PlatformOrganisationService,
     PlatformAdminService,
     PlatformTokenService,
   ],
 })
 export class PlatformModule {}
+

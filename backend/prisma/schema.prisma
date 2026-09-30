@@ -1,9 +1,3 @@
-// ============================================================
-// Clyptus Job Portal - Prisma Database Schema
-// Module: Platform Super Admin & Shared Platform Foundation
-// Provider: PostgreSQL
-// ============================================================
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,9 +7,235 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ------------------------------------------------------------
-// ENUMS
-// ------------------------------------------------------------
+model User {
+  id                   String                @id @default(uuid())
+  email                String                @unique
+  passwordHash         String
+  firstName            String
+  lastName             String
+  role                 UserRole              @default(CANDIDATE)
+  isActive             Boolean               @default(true)
+  isEmailVerified      Boolean               @default(false)
+  organisationId       String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  auditLogsInitiated   AuditLog[]            @relation("ActorAuditLogs")
+  platformAdminProfile PlatformAdminProfile?
+  sessions             PlatformSession[]
+  securityEvents       SecurityEvent[]       @relation("ActorSecurityEvents")
+  tokenTransactions    TokenTransaction[]    @relation("ActorTokenTransactions")
+  organisation         Organisation?         @relation(fields: [organisationId], references: [id])
+
+  @@index([role])
+  @@index([organisationId])
+  @@index([isActive])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model PlatformAdminProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  department  String?
+  permissions String[] @default([])
+  isActive    Boolean  @default(true)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("platform_admin_profiles")
+}
+
+model PlatformSession {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("platform_sessions")
+}
+
+model Organisation {
+  id                String                    @id @default(uuid())
+  name              String
+  slug              String                    @unique
+  domain            String?                   @unique
+  contactEmail      String
+  contactPhone      String?
+  status            OrganisationStatus        @default(PENDING_VERIFICATION)
+  suspensionReason  String?
+  suspendedAt       DateTime?
+  suspendedById     String?
+  tier              String                    @default("STANDARD")
+  maxRecruiters     Int                       @default(5)
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  auditLogs         AuditLog[]
+  metadata          OrganisationMetadata?
+  tokenBalance      OrganisationTokenBalance?
+  allocationLimit   TokenAllocationLimit?
+  tokenTransactions TokenTransaction[]
+  users             User[]
+
+  @@index([status])
+  @@index([slug])
+  @@index([domain])
+  @@index([createdAt])
+  @@map("organisations")
+}
+
+model OrganisationMetadata {
+  id             String       @id @default(uuid())
+  organisationId String       @unique
+  industry       String?
+  companySize    String?
+  website        String?
+  logoUrl        String?
+  address        String?
+  billingDetails Json?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@map("organisation_metadata")
+}
+
+model TokenPlan {
+  id           String       @id @default(uuid())
+  name         String
+  code         String       @unique
+  description  String?
+  tokenAmount  Int
+  priceCents   Int
+  currency     String       @default("USD")
+  billingCycle BillingCycle @default(MONTHLY)
+  features     Json?        @default("[]")
+  isActive     Boolean      @default(true)
+  sortOrder    Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([isActive])
+  @@index([code])
+  @@map("token_plans")
+}
+
+model OrganisationTokenBalance {
+  id              String       @id @default(uuid())
+  organisationId  String       @unique
+  balance         Int          @default(0)
+  allocatedTokens Int          @default(0)
+  consumedTokens  Int          @default(0)
+  reservedTokens  Int          @default(0)
+  updatedAt       DateTime     @updatedAt
+  organisation    Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@map("organisation_token_balances")
+}
+
+model TokenTransaction {
+  id             String               @id @default(uuid())
+  organisationId String
+  actorId        String?
+  type           TokenTransactionType
+  amount         Int
+  balanceBefore  Int
+  balanceAfter   Int
+  referenceId    String?
+  reason         String?
+  metadata       Json?                @default("{}")
+  createdAt      DateTime             @default(now())
+  actor          User?                @relation("ActorTokenTransactions", fields: [actorId], references: [id])
+  organisation   Organisation         @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+
+  @@index([organisationId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([actorId])
+  @@map("token_transactions")
+}
+
+model TokenAllocationLimit {
+  id                    String       @id @default(uuid())
+  organisationId        String       @unique
+  monthlyMaxAllocation  Int          @default(10000)
+  singleTxLimit         Int          @default(5000)
+  autoRechargeEnabled   Boolean      @default(false)
+  autoRechargeThreshold Int          @default(500)
+  autoRechargeAmount    Int          @default(2000)
+  updatedAt             DateTime     @updatedAt
+  organisation          Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@map("token_allocation_limits")
+}
+
+model AuditLog {
+  id             String        @id @default(uuid())
+  actorId        String?
+  actorRole      String?
+  action         String
+  entityType     String
+  entityId       String
+  organisationId String?
+  metadata       Json?         @default("{}")
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime      @default(now())
+  actor          User?         @relation("ActorAuditLogs", fields: [actorId], references: [id])
+  organisation   Organisation? @relation(fields: [organisationId], references: [id])
+
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([organisationId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model SecurityEvent {
+  id              String           @id @default(uuid())
+  eventType       String
+  severity        SecuritySeverity @default(MEDIUM)
+  actorId         String?
+  ipAddress       String?
+  userAgent       String?
+  details         Json?            @default("{}")
+  isResolved      Boolean          @default(false)
+  resolvedAt      DateTime?
+  resolvedById    String?
+  resolutionNotes String?
+  createdAt       DateTime         @default(now())
+  actor           User?            @relation("ActorSecurityEvents", fields: [actorId], references: [id])
+
+  @@index([eventType])
+  @@index([severity])
+  @@index([isResolved])
+  @@index([createdAt])
+  @@map("security_events")
+}
+
+model PlatformSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       Json
+  category    String   @default("GENERAL")
+  description String?
+  isEncrypted Boolean  @default(false)
+  isPublic    Boolean  @default(false)
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@map("platform_settings")
+}
 
 enum UserRole {
   PLATFORM_SUPER_ADMIN
@@ -54,268 +274,4 @@ enum SecuritySeverity {
   MEDIUM
   HIGH
   CRITICAL
-}
-
-// ------------------------------------------------------------
-// USER & AUTHENTICATION
-// ------------------------------------------------------------
-
-model User {
-  id                String       @id @default(uuid())
-  email             String       @unique
-  passwordHash      String
-  firstName         String
-  lastName          String
-  role              UserRole     @default(CANDIDATE)
-  isActive          Boolean      @default(true)
-  isEmailVerified   Boolean      @default(false)
-  organisationId    String?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-
-  // Platform Admin details if role is PLATFORM_ADMIN
-  platformAdminProfile PlatformAdminProfile?
-
-  // Relations
-  organisation      Organisation? @relation(fields: [organisationId], references: [id], onDelete: SetNull)
-  auditLogsInitiated AuditLog[]  @relation("ActorAuditLogs")
-  tokenTransactions TokenTransaction[] @relation("ActorTokenTransactions")
-  securityEvents    SecurityEvent[] @relation("ActorSecurityEvents")
-  sessions          PlatformSession[]
-
-  @@index([role])
-  @@index([organisationId])
-  @@index([isActive])
-  @@index([createdAt])
-  @@map("users")
-}
-
-model PlatformAdminProfile {
-  id             String    @id @default(uuid())
-  userId         String    @unique
-  department     String?
-  permissions    String[]  @default([])
-  isActive       Boolean   @default(true)
-  notes          String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("platform_admin_profiles")
-}
-
-model PlatformSession {
-  id             String    @id @default(uuid())
-  userId         String
-  tokenHash      String    @unique
-  ipAddress      String?
-  userAgent      String?
-  expiresAt      DateTime
-  revokedAt      DateTime?
-  createdAt      DateTime  @default(now())
-
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([expiresAt])
-  @@map("platform_sessions")
-}
-
-// ------------------------------------------------------------
-// ORGANISATIONS
-// ------------------------------------------------------------
-
-model Organisation {
-  id                String             @id @default(uuid())
-  name              String
-  slug              String             @unique
-  domain            String?            @unique
-  contactEmail      String
-  contactPhone      String?
-  status            OrganisationStatus @default(PENDING_VERIFICATION)
-  suspensionReason  String?
-  suspendedAt       DateTime?
-  suspendedById     String?
-  tier              String             @default("STANDARD")
-  maxRecruiters     Int                @default(5)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-
-  // Relations
-  users             User[]
-  metadata          OrganisationMetadata?
-  tokenBalance      OrganisationTokenBalance?
-  tokenTransactions TokenTransaction[]
-  allocationLimit   TokenAllocationLimit?
-  auditLogs         AuditLog[]
-
-  @@index([status])
-  @@index([slug])
-  @@index([domain])
-  @@index([createdAt])
-  @@map("organisations")
-}
-
-model OrganisationMetadata {
-  id             String       @id @default(uuid())
-  organisationId String       @unique
-  industry       String?
-  companySize    String?
-  website        String?
-  logoUrl        String?
-  address        String?
-  billingDetails Json?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-
-  @@map("organisation_metadata")
-}
-
-// ------------------------------------------------------------
-// TOKEN SYSTEM (IMMUTABLE LEDGER)
-// ------------------------------------------------------------
-
-model TokenPlan {
-  id             String       @id @default(uuid())
-  name           String
-  code           String       @unique
-  description    String?
-  tokenAmount    Int
-  priceCents     Int
-  currency       String       @default("USD")
-  billingCycle   BillingCycle @default(MONTHLY)
-  features       Json?        @default("[]")
-  isActive       Boolean      @default(true)
-  sortOrder      Int          @default(0)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  @@index([isActive])
-  @@index([code])
-  @@map("token_plans")
-}
-
-model OrganisationTokenBalance {
-  id               String       @id @default(uuid())
-  organisationId   String       @unique
-  balance          Int          @default(0)
-  allocatedTokens  Int          @default(0)
-  consumedTokens   Int          @default(0)
-  reservedTokens   Int          @default(0)
-  updatedAt        DateTime     @updatedAt
-
-  organisation     Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-
-  @@map("organisation_token_balances")
-}
-
-model TokenTransaction {
-  id             String               @id @default(uuid())
-  organisationId String
-  actorId        String?
-  type           TokenTransactionType
-  amount         Int                  // Positive for credit/allocation/refund, negative for consumption
-  balanceBefore  Int
-  balanceAfter   Int
-  referenceId    String?              // e.g., paymentId, orderId, jobId
-  reason         String?
-  metadata       Json?                @default("{}")
-  createdAt      DateTime             @default(now())
-
-  organisation   Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  actor          User?                @relation("ActorTokenTransactions", fields: [actorId], references: [id], onDelete: SetNull)
-
-  @@index([organisationId])
-  @@index([type])
-  @@index([createdAt])
-  @@index([actorId])
-  @@map("token_transactions")
-}
-
-model TokenAllocationLimit {
-  id                      String       @id @default(uuid())
-  organisationId          String       @unique
-  monthlyMaxAllocation    Int          @default(10000)
-  singleTxLimit           Int          @default(5000)
-  autoRechargeEnabled     Boolean      @default(false)
-  autoRechargeThreshold   Int          @default(500)
-  autoRechargeAmount      Int          @default(2000)
-  updatedAt               DateTime     @updatedAt
-
-  organisation            Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-
-  @@map("token_allocation_limits")
-}
-
-// ------------------------------------------------------------
-// AUDIT LOGGING (CENTRALIZED & SENSITIVE-SAFE)
-// ------------------------------------------------------------
-
-model AuditLog {
-  id             String    @id @default(uuid())
-  actorId        String?
-  actorRole      String?
-  action         String
-  entityType     String
-  entityId       String
-  organisationId String?
-  metadata       Json?     @default("{}")
-  ipAddress      String?
-  userAgent      String?
-  createdAt      DateTime  @default(now())
-
-  actor          User?         @relation("ActorAuditLogs", fields: [actorId], references: [id], onDelete: SetNull)
-  organisation   Organisation? @relation(fields: [organisationId], references: [id], onDelete: SetNull)
-
-  @@index([action])
-  @@index([entityType, entityId])
-  @@index([actorId])
-  @@index([organisationId])
-  @@index([createdAt])
-  @@map("audit_logs")
-}
-
-// ------------------------------------------------------------
-// SECURITY & MONITORING
-// ------------------------------------------------------------
-
-model SecurityEvent {
-  id              String           @id @default(uuid())
-  eventType       String
-  severity        SecuritySeverity @default(MEDIUM)
-  actorId         String?
-  ipAddress       String?
-  userAgent       String?
-  details         Json?            @default("{}")
-  isResolved      Boolean          @default(false)
-  resolvedAt      DateTime?
-  resolvedById    String?
-  resolutionNotes String?
-  createdAt       DateTime         @default(now())
-
-  actor           User?            @relation("ActorSecurityEvents", fields: [actorId], references: [id], onDelete: SetNull)
-
-  @@index([eventType])
-  @@index([severity])
-  @@index([isResolved])
-  @@index([createdAt])
-  @@map("security_events")
-}
-
-model PlatformSetting {
-  id          String   @id @default(uuid())
-  key         String   @unique
-  value       Json
-  category    String   @default("GENERAL") // GENERAL, SECURITY, BILLING, INTEGRATION, NOTIFICATIONS
-  description String?
-  isEncrypted Boolean  @default(false)
-  isPublic    Boolean  @default(false)
-  updatedById String?
-  updatedAt   DateTime @updatedAt
-
-  @@index([category])
-  @@map("platform_settings")
 }

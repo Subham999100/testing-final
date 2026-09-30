@@ -12,9 +12,9 @@ export const apiClient: AxiosInstance = axios.create({
   timeout: 10000,
 });
 
-// Attach JWT token from localStorage or session
+// Attach real JWT from localStorage — no dev fallback
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('clyptus_token') || 'dev_superadmin_token';
+  const token = localStorage.getItem('clyptus_token');
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }

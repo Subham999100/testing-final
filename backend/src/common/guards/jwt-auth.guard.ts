@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import * as crypto from 'crypto';
 import { PrismaService } from '../../database/prisma.service';
 import { AuthenticatedUser } from '../interfaces/authenticated-user.interface';
 import { UserRole } from '@prisma/client';
@@ -37,31 +38,72 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     try {
-      const secret = this.configService.get<string>('JWT_SECRET', 'super-secret-jwt-key-replace-in-production-min-32-chars-long');
-      const payload = this.jwtService.verify(token, { secret });
+      const secret =
+        this.configService.get<string>('jwt.secret') ||
+        this.configService.get<string>('JWT_SECRET');
 
-      // Fetch user from DB to ensure account is active and role has not been revoked
-      const user = await this.prisma.user.findUnique({
-        where: { id: payload.sub || payload.userId },
-        include: { platformAdminProfile: true },
+      if (!secret) {
+        throw new UnauthorizedException('JWT configuration error');
+      }
+
+      const payload = this.jwtService.verify(token, { secret });
+      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+      // Fetch session and associated user + admin profile in a single indexed query
+      const session = await this.prisma.platformSession.findUnique({
+        where: { tokenHash },
+        include: {
+          user: {
+            include: { platformAdminProfile: true },
+          },
+        },
       });
 
+      if (!session) {
+        throw new UnauthorizedException('Session invalid or does not exist');
+      }
+
+      if (session.revokedAt) {
+        throw new UnauthorizedException('Session has been revoked');
+      }
+
+      if (session.expiresAt && session.expiresAt <= new Date()) {
+        throw new UnauthorizedException('Session has expired');
+      }
+
+      const user = session.user;
       if (!user) {
-        throw new UnauthorizedException('User session invalid or user does not exist');
+        throw new UnauthorizedException('User does not exist');
       }
 
       if (!user.isActive) {
         throw new UnauthorizedException('User account has been deactivated');
       }
 
-      // Attach strongly-typed identity to request
+      // Enforce active PlatformAdminProfile for PLATFORM_ADMIN
+      if (user.role === UserRole.PLATFORM_ADMIN) {
+        if (!user.platformAdminProfile || !user.platformAdminProfile.isActive) {
+          throw new UnauthorizedException('Platform admin profile has been deactivated');
+        }
+      }
+
+      // Strictly resolve permissions
+      let permissions: string[] = [];
+      if (user.role === UserRole.PLATFORM_SUPER_ADMIN) {
+        permissions = ['*'];
+      } else if (user.role === UserRole.PLATFORM_ADMIN) {
+        permissions = user.platformAdminProfile?.permissions || [];
+      }
+
+      // Attach strongly-typed identity with sessionId to request
       const authenticatedUser: AuthenticatedUser = {
         userId: user.id,
+        sessionId: session.id,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
-        permissions: user.platformAdminProfile?.permissions || (user.role === UserRole.PLATFORM_SUPER_ADMIN ? ['*'] : []),
+        permissions,
         organisationId: user.organisationId,
       };
 
@@ -75,3 +117,4 @@ export class JwtAuthGuard implements CanActivate {
     }
   }
 }
+

@@ -7,6 +7,7 @@ import { UserRole } from '@prisma/client';
 
 export interface AuthenticatedUser {
   userId: string;
+  sessionId?: string;
   email: string;
   firstName: string;
   lastName: string;
@@ -14,3 +15,4 @@ export interface AuthenticatedUser {
   permissions?: string[];
   organisationId?: string | null;
 }
+
