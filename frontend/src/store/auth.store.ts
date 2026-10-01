@@ -1,124 +1,117 @@
 // ============================================================
-// Clyptus Job Portal - Platform Session Store
-// Manages authenticated platform user context (Super Admin or Platform Admin)
-//
-// IMPORTANT: This store calls real backend endpoints.
-// - login() → POST /platform/auth/login (validates credentials, creates session)
-// - logout() → POST /platform/auth/logout (revokes session server-side)
-// - initAuth() → GET /platform/auth/me (validates session on app reload)
-// The JWT is stored in localStorage under 'clyptus_platform_token'.
-// The backend's JwtAuthGuard validates every request against the session DB.
+// Clyptus Job Portal - Shared Platform Authentication Store
+// Used by Platform Super Admin and Platform Admin.
 // ============================================================
 
-import { create } from 'zustand';
-import { UserRole } from '../types/platform.types';
-import { apiClient } from '../services/api';
-
-export interface UserSession {
-  userId: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  role: UserRole;
-  permissions?: string[];
-  token: string;
-}
+import { create } from "zustand";
+import {
+  AuthService,
+  AuthUser,
+  PlatformLoginRole,
+} from "../services/auth.service";
+import {
+  clearPlatformAccessToken,
+  getPlatformAccessToken,
+  setPlatformAccessToken,
+  hasRememberedSession,
+  setRememberedSession,
+} from "../services/auth-session";
 
 interface AuthState {
-  user: UserSession | null;
-  isInitializing: boolean;
-  isLoggingIn: boolean;
-  loginError: string | null;
+  user: AuthUser | null;
   notificationsCount: number;
-  initAuth: () => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
+  isHydrating: boolean;
+  isAuthenticating: boolean;
+  authError: string | null;
+  login: (
+    email: string,
+    password: string,
+    expectedRole?: PlatformLoginRole,
+    rememberMe?: boolean,
+  ) => Promise<AuthUser>;
+  restoreSession: () => Promise<void>;
   logout: () => Promise<void>;
-  clearLoginError: () => void;
+  clearSession: () => void;
+  clearAuthError: () => void;
 }
-
-const PLATFORM_TOKEN_KEY = 'clyptus_platform_token';
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  isInitializing: true,
-  isLoggingIn: false,
-  loginError: null,
   notificationsCount: 0,
+  isHydrating: Boolean(getPlatformAccessToken() || hasRememberedSession()),
+  isAuthenticating: false,
+  authError: null,
 
-  initAuth: async () => {
-    const token = localStorage.getItem(PLATFORM_TOKEN_KEY);
-    if (!token) {
-      set({ user: null, isInitializing: false });
-      return;
-    }
-
+  login: async (email, password, expectedRole, rememberMe = false) => {
+    set({ isAuthenticating: true, authError: null });
     try {
-      const res: any = await apiClient.get('/platform/auth/me');
-      const data = res.data || res;
-
+      const result = await AuthService.login(
+        email,
+        password,
+        expectedRole,
+        rememberMe,
+      );
+      setPlatformAccessToken(result.accessToken);
+      setRememberedSession(rememberMe);
       set({
-        user: {
-          userId: data.id || data.userId,
-          email: data.email,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          role: data.role,
-          permissions: data.permissions || [],
-          token,
-        },
-        isInitializing: false,
+        user: result.user,
+        isAuthenticating: false,
+        isHydrating: false,
+        authError: null,
       });
-    } catch {
-      // Invalid/expired/revoked session or unauthorized role
-      localStorage.removeItem(PLATFORM_TOKEN_KEY);
-      set({ user: null, isInitializing: false });
+      return result.user;
+    } catch (error: any) {
+      clearPlatformAccessToken();
+      setRememberedSession(false);
+      const message =
+        error?.message || "Unable to sign in to the Platform Portal";
+      set({
+        user: null,
+        isAuthenticating: false,
+        isHydrating: false,
+        authError: message,
+      });
+      throw error;
     }
   },
 
-  login: async (email: string, password: string) => {
-    set({ isLoggingIn: true, loginError: null });
+  restoreSession: async () => {
+    const token = getPlatformAccessToken();
+    if (!token && !hasRememberedSession()) {
+      set({ user: null, isHydrating: false });
+      return;
+    }
+
+    set({ isHydrating: true });
     try {
-      const res: any = await apiClient.post('/platform/auth/login', { email, password });
-      const data = res.data || res;
-
-      // Store the platform JWT
-      localStorage.setItem(PLATFORM_TOKEN_KEY, data.accessToken);
-
-      set({
-        user: {
-          userId: data.user.id || data.user.userId,
-          email: data.user.email,
-          firstName: data.user.firstName,
-          lastName: data.user.lastName,
-          role: data.user.role,
-          permissions: data.user.permissions || [],
-          token: data.accessToken,
-        },
-        isLoggingIn: false,
-        loginError: null,
-      });
-    } catch (err: any) {
-      localStorage.removeItem(PLATFORM_TOKEN_KEY);
-      set({
-        user: null,
-        isLoggingIn: false,
-        loginError: err?.message || 'Invalid credentials',
-      });
-      throw err;
+      const user = await AuthService.me();
+      set({ user, isHydrating: false, authError: null });
+    } catch {
+      clearPlatformAccessToken();
+      setRememberedSession(false);
+      set({ user: null, isHydrating: false });
     }
   },
 
   logout: async () => {
     try {
-      // Revoke session server-side — JwtAuthGuard will block the token immediately
-      await apiClient.post('/platform/auth/logout');
+      if (getPlatformAccessToken() || hasRememberedSession()) {
+        await AuthService.logout();
+      }
     } catch {
-      // Even if the network call fails, clear the local session
+      // Local logout must still complete if the server session already expired/revoked.
     } finally {
-      localStorage.removeItem(PLATFORM_TOKEN_KEY);
-      set({ user: null, loginError: null, notificationsCount: 0 });
+      clearPlatformAccessToken();
+      setRememberedSession(false);
+      set({ user: null, notificationsCount: 0, authError: null });
     }
   },
 
-  clearLoginError: () => set({ loginError: null }),
+  clearSession: () => {
+    clearPlatformAccessToken();
+    setRememberedSession(false);
+    set({ user: null, notificationsCount: 0, isHydrating: false });
+  },
+
+  clearAuthError: () => set({ authError: null }),
 }));

@@ -53,17 +53,17 @@ export const Settings: React.FC = () => {
     <div className="space-y-6">
       {/* Title */}
       <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">Platform Configuration</h1>
-        <p className="text-xs text-slate-400 mt-1">
+        <h1 className="text-2xl font-bold text-ink tracking-tight">Platform Configuration</h1>
+        <p className="text-xs text-muted mt-1">
           Root platform settings, gateway switches, and infrastructure connectivity controls.
         </p>
       </div>
 
       {/* INTEGRATIONS GRID */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 space-y-4">
+      <div className="rounded-xl border border-line bg-surface p-5 space-y-4">
         <div className="flex items-center gap-2">
-          <Server className="w-4 h-4 text-cyan-400" />
-          <h3 className="text-sm font-bold text-white">External Service Adapters & Integrations</h3>
+          <Server className="w-4 h-4 text-action" />
+          <h3 className="text-sm font-bold text-ink">External Service Adapters & Integrations</h3>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {integrations.map((item) => {
@@ -74,15 +74,15 @@ export const Settings: React.FC = () => {
             return (
               <div
                 key={item.name}
-                className="p-4 rounded-xl bg-slate-800/40 border border-slate-800 flex items-center justify-between"
+                className="p-4 rounded-xl bg-soft border border-line flex items-center justify-between"
               >
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-slate-800 text-indigo-400">
+                  <div className="p-2 rounded-lg bg-soft text-action">
                     <Icon className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-xs font-semibold text-white block">{item.name}</span>
-                    <span className="text-[10px] text-slate-400 font-mono">
+                    <span className="text-xs font-semibold text-ink block">{item.name}</span>
+                    <span className="text-[10px] text-muted font-mono">
                       {setting?.key || 'INTEGRATION_READY'}
                     </span>
                   </div>
@@ -94,8 +94,8 @@ export const Settings: React.FC = () => {
                   onClick={() => setting && handleToggle(setting)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                     isActive
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                      : 'bg-slate-800 text-slate-400 border border-slate-700'
+                      ? 'bg-success-soft text-success border border-success'
+                      : 'bg-soft text-muted border border-line-strong'
                   }`}
                 >
                   {savingKey === item.key ? 'Saving...' : isActive ? 'Enabled' : 'Disabled'}
@@ -107,16 +107,16 @@ export const Settings: React.FC = () => {
       </div>
 
       {/* GENERAL CONFIGURATION SETTINGS */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 space-y-4">
-        <h3 className="text-sm font-bold text-white">Core Platform Parameters</h3>
-        <div className="divide-y divide-slate-800/80">
+      <div className="rounded-xl border border-line bg-surface p-5 space-y-4">
+        <h3 className="text-sm font-bold text-ink">Core Platform Parameters</h3>
+        <div className="divide-y divide-line">
           {settings
             .filter((s) => s.category !== 'INTEGRATION')
             .map((s) => (
               <div key={s.key} className="py-3 flex items-center justify-between text-xs">
                 <div>
-                  <span className="font-semibold text-slate-200 block font-mono">{s.key}</span>
-                  <span className="text-slate-400 text-[11px] block">{s.description}</span>
+                  <span className="font-semibold text-ink block font-mono">{s.key}</span>
+                  <span className="text-muted text-[11px] block">{s.description}</span>
                 </div>
                 <div>
                   {typeof s.value === 'boolean' ? (
@@ -124,14 +124,14 @@ export const Settings: React.FC = () => {
                       onClick={() => handleToggle(s)}
                       className={`px-3 py-1 rounded text-xs font-semibold ${
                         s.value
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-slate-800 text-slate-400 border border-slate-700'
+                          ? 'bg-success-soft text-success border border-success'
+                          : 'bg-soft text-muted border border-line-strong'
                       }`}
                     >
                       {s.value ? 'Active' : 'Inactive'}
                     </button>
                   ) : (
-                    <span className="px-3 py-1 rounded bg-slate-800 text-white font-mono text-xs">
+                    <span className="px-3 py-1 rounded bg-soft text-ink font-mono text-xs">
                       {String(s.value)}
                     </span>
                   )}

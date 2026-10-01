@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200" viewBox="0 0 900 1200" fill="none">
+<title>A sunlit architectural space with terracotta arches and ascending steps</title>
+<rect width="900" height="1200" fill="#d5b69a"/>
+<path d="M0 0H900V790L0 1000Z" fill="#eee0cd"/>
+<path d="M620 0H900V1200H620Z" fill="#c47d4f"/>
+<path d="M625 1120V343C625 230 533 138 420 138C307 138 215 230 215 343V1120" fill="#b86234"/>
+<path d="M560 1110V350C560 272 498 208 420 208C342 208 280 272 280 350V1110" fill="#9bb4aa"/>
+<path d="M280 750L560 540V1110H280Z" fill="#66897d"/>
+<circle cx="462" cy="378" r="70" fill="#f9df9e"/>
+<path d="M280 350H560M420 208V990M280 590H560M280 830H560" stroke="#e7c9a6" stroke-width="12"/>
+<path d="M0 1030L900 740V1200H0Z" fill="#dbc4a9"/>
+<path d="M430 992H900V1200H170V1140H240V1080H330V1030H430V992Z" fill="#f6e8d3"/>
+<path d="M430 992H900V1030H430ZM330 1030H900V1080H330ZM240 1080H900V1140H240ZM170 1140H900V1200H170Z" fill="#d69c6e"/>
+<path d="M430 992H900M330 1030H900M240 1080H900M170 1140H900" stroke="#faead3" stroke-width="10"/>
+<path d="M0 0L140 0V850L0 900Z" fill="#f7ebdb"/>
+<path d="M685 0H765V850H685Z" fill="#dcac83"/>
+<path d="M688 0L766 0L280 920L183 955Z" fill="#fff7df" fill-opacity=".23"/>
+<ellipse cx="177" cy="995" rx="120" ry="27" fill="#b29a80" fill-opacity=".4"/>
+<path d="M128 849H236L221 995H146Z" fill="#b34e26"/>
+<path d="M182 877V611" stroke="#405d4a" stroke-width="9"/>
+<path d="M181 813C80 800 78 733 91 685C159 712 186 746 181 813ZM181 756C267 739 289 676 270 627C208 647 176 698 181 756ZM182 684C113 657 105 607 122 556C180 584 205 631 182 684Z" fill="#405d4a"/>
+<path d="M0 1200V1116L900 838V1200Z" fill="#402b1d" fill-opacity=".07"/>
+</svg>

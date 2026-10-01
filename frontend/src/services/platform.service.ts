@@ -1,9 +1,7 @@
 // ============================================================
 // Clyptus Job Portal - Platform Super Admin Service
 // Connects UI with /api/v1/platform/* backend endpoints
-//
-// IMPORTANT: No mock data fallbacks exist here. API rejections propagate
-// to the UI layer so that real 401, 403, and 500 errors are never hidden.
+// Production requests return real API data or explicit errors.
 // ============================================================
 
 import { apiClient } from './api';
@@ -17,14 +15,25 @@ import {
   SecurityEvent,
   PlatformSetting,
 } from '../types/platform.types';
-
 export const PlatformService = {
+  async read(path: string, params?: Record<string, unknown>): Promise<any> {
+    const response: any = await apiClient.get(`/platform/${path}`, { params });
+    return response.meta ? response : (response.data ?? response);
+  },
+  async write(path: string, body: unknown = {}, method: 'post' | 'patch' = 'post'): Promise<any> {
+    const response: any = await apiClient[method](`/platform/${path}`, body);
+    return response.data ?? response;
+  },
   // ------------------------------------------------------------
   // DASHBOARD
   // ------------------------------------------------------------
   async getDashboardSummary(): Promise<PlatformDashboardSummary> {
-    const res: any = await apiClient.get('/platform/dashboard');
-    return res.data || res;
+    try {
+      const res: any = await apiClient.get('/platform/dashboard');
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
   },
 
   // ------------------------------------------------------------
@@ -37,75 +46,108 @@ export const PlatformService = {
     status?: string;
     tier?: string;
   }): Promise<{ data: Organisation[]; meta: { total: number; totalPages: number; page: number } }> {
-    const res: any = await apiClient.get('/platform/organisations', { params });
-    return { data: res.data || [], meta: res.meta || { total: res.data?.length || 0, totalPages: 1, page: 1 } };
+    try {
+      const res: any = await apiClient.get('/platform/organisations', { params });
+      return res.data ? res : { data: res, meta: { total: res.length, totalPages: 1, page: 1 } };
+    } catch (failure) {
+      throw failure;
+    }
   },
 
   async getOrganisationById(id: string): Promise<Organisation> {
-    const res: any = await apiClient.get(`/platform/organisations/${id}`);
-    return res.data || res;
+    try {
+      const res: any = await apiClient.get(`/platform/organisations/${id}`);
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
   },
 
-  async createOrganisation(payload: any): Promise<{
-    organisation: Organisation;
-    superAdmin: { id: string; name: string; email: string; role: string };
-  }> {
-    const res: any = await apiClient.post('/platform/organisations', payload);
-    return res;
+  async createOrganisation(payload: any): Promise<Organisation> {
+    try {
+      const res: any = await apiClient.post('/platform/organisations', payload);
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
   },
 
   async suspendOrganisation(id: string, reason: string): Promise<Organisation> {
-    const res: any = await apiClient.post(`/platform/organisations/${id}/suspend`, { reason });
-    return res.data || res;
+    try {
+      const res: any = await apiClient.post(`/platform/organisations/${id}/suspend`, { reason });
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
   },
 
   async activateOrganisation(id: string): Promise<Organisation> {
-    const res: any = await apiClient.post(`/platform/organisations/${id}/activate`);
-    return res.data || res;
-  },
-
-  async resetSuperAdminPassword(organisationId: string): Promise<{
-    superAdmin: { id: string; name: string; email: string; role: string };
-    temporaryPassword: string;
-  }> {
-    const res: any = await apiClient.post(`/platform/organisations/${organisationId}/super-admin/reset-password`);
-    return res.data || res;
+    try {
+      const res: any = await apiClient.post(`/platform/organisations/${id}/activate`);
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
   },
 
   // ------------------------------------------------------------
   // PLATFORM ADMINS
   // ------------------------------------------------------------
   async getAdmins(): Promise<{ data: PlatformAdminUser[] }> {
-    const res: any = await apiClient.get('/platform/admins');
-    return { data: res.data || res };
+    try {
+      const res: any = await apiClient.get('/platform/admins');
+      return res.data ? res : { data: res };
+    } catch (failure) {
+      throw failure;
+    }
   },
 
   async createAdmin(payload: any): Promise<PlatformAdminUser> {
-    const res: any = await apiClient.post('/platform/admins', payload);
-    return res.data || res;
+    try {
+      const res: any = await apiClient.post('/platform/admins', payload);
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
   },
 
   async toggleAdminStatus(id: string, isActive: boolean): Promise<PlatformAdminUser> {
-    const res: any = await apiClient.patch(`/platform/admins/${id}/status`, { isActive });
-    return res.data || res;
+    try {
+      const res: any = await apiClient.patch(`/platform/admins/${id}/status`, { isActive });
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
   },
 
   // ------------------------------------------------------------
   // TOKEN PLANS & LEDGER
   // ------------------------------------------------------------
   async getTokenPlans(): Promise<TokenPlan[]> {
-    const res: any = await apiClient.get('/platform/token-plans');
-    return res.data || res;
+    try {
+      const res: any = await apiClient.get('/platform/token-plans');
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
   },
 
   async createTokenPlan(payload: any): Promise<TokenPlan> {
-    const res: any = await apiClient.post('/platform/token-plans', payload);
-    return res.data || res;
+    try {
+      const res: any = await apiClient.post('/platform/token-plans', payload);
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
   },
 
   async getTokenTransactions(params?: any): Promise<{ data: TokenTransaction[]; meta: any }> {
-    const res: any = await apiClient.get('/platform/token-transactions', { params });
-    return { data: res.data || [], meta: res.meta || { total: res.data?.length || 0 } };
+    try {
+      const res: any = await apiClient.get('/platform/token-transactions', { params });
+      return res.data ? res : { data: res, meta: { total: res.length } };
+    } catch (failure) {
+      throw failure;
+    }
   },
 
   async adjustTokens(payload: {
@@ -115,40 +157,80 @@ export const PlatformService = {
     reason: string;
     referenceId?: string;
   }) {
-    const res: any = await apiClient.post('/platform/tokens/adjust', payload);
-    return res.data || res;
+    try {
+      const res: any = await apiClient.post('/platform/tokens/adjust', payload);
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
   },
 
   // ------------------------------------------------------------
   // ANALYTICS, AUDIT & SECURITY
   // ------------------------------------------------------------
   async getAnalytics(timeframe = '30d') {
-    const res: any = await apiClient.get('/platform/analytics', { params: { timeframe } });
-    return res.data || res;
+    try {
+      const res: any = await apiClient.get('/platform/analytics', { params: { timeframe } });
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
   },
 
   async getAuditLogs(params?: any): Promise<{ data: AuditLogItem[]; meta: any }> {
-    const res: any = await apiClient.get('/platform/audit-logs', { params });
-    return { data: res.data || [], meta: res.meta || { total: res.data?.length || 0 } };
+    try {
+      const res: any = await apiClient.get('/platform/audit-logs', { params });
+      return res.data ? res : { data: res, meta: { total: res.length } };
+    } catch (failure) {
+      throw failure;
+    }
   },
 
   async getSecurityEvents(params?: any): Promise<{ data: SecurityEvent[]; meta: any }> {
-    const res: any = await apiClient.get('/platform/security/events', { params });
-    return { data: res.data || [], meta: res.meta || { total: res.data?.length || 0 } };
+    try {
+      const res: any = await apiClient.get('/platform/security/events', { params });
+      return res.data ? res : { data: res, meta: { total: res.length } };
+    } catch (failure) {
+      throw failure;
+    }
   },
 
   async resolveSecurityEvent(id: string, resolutionNotes: string) {
-    const res: any = await apiClient.post(`/platform/security/events/${id}/resolve`, { resolutionNotes });
-    return res.data || res;
+    try {
+      const res: any = await apiClient.post(`/platform/security/events/${id}/resolve`, {
+        resolutionNotes,
+      });
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
   },
 
   async getSettings(): Promise<PlatformSetting[]> {
-    const res: any = await apiClient.get('/platform/settings');
-    return res.data || res;
+    try {
+      const res: any = await apiClient.get('/platform/settings');
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
   },
 
   async updateSetting(key: string, value: any): Promise<PlatformSetting> {
-    const res: any = await apiClient.patch(`/platform/settings/${key}`, { value });
-    return res.data || res;
+    try {
+      const res: any = await apiClient.patch(`/platform/settings/${key}`, { value });
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
+  },
+
+  async getMonitoringOverview() {
+    try {
+      const res: any = await apiClient.get('/platform/monitoring');
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
   },
 };
+

@@ -2,7 +2,13 @@
 // Clyptus Job Portal - Frontend Platform Super Admin Types
 // ============================================================
 
-export type OrganisationStatus = 'ACTIVE' | 'SUSPENDED' | 'PENDING_VERIFICATION' | 'ARCHIVED';
+export type OrganisationStatus =
+  | 'ACTIVE'
+  | 'SUSPENDED'
+  | 'PENDING_VERIFICATION'
+  | 'ARCHIVED'
+  | 'REJECTED'
+  | 'MORE_INFORMATION_REQUIRED';
 
 export type UserRole =
   | 'PLATFORM_SUPER_ADMIN'
@@ -13,25 +19,9 @@ export type UserRole =
   | 'CANDIDATE';
 
 export type TokenTransactionType =
-  | 'PURCHASE'
-  | 'ALLOCATION'
-  | 'CONSUMPTION'
-  | 'REFUND'
-  | 'ADJUSTMENT'
-  | 'EXPIRATION'
-  | 'REVERSAL';
+  'PURCHASE' | 'ALLOCATION' | 'CONSUMPTION' | 'REFUND' | 'ADJUSTMENT' | 'EXPIRATION' | 'REVERSAL';
 
 export type SecuritySeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-
-export interface OrganisationSuperAdminSummary {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  isActive: boolean;
-  status: 'ACTIVE' | 'INACTIVE';
-  createdAt: string;
-}
 
 export interface Organisation {
   id: string;
@@ -54,7 +44,6 @@ export interface Organisation {
   industry?: string | null;
   companySize?: string | null;
   website?: string | null;
-  superAdmin?: OrganisationSuperAdminSummary | null;
 }
 
 export interface PlatformAdminUser {
@@ -174,3 +163,59 @@ export interface PlatformDashboardSummary {
     services: Record<string, any>;
   };
 }
+
+export type HealthStatus = 'HEALTHY' | 'DEGRADED' | 'DOWN' | 'NOT_CONFIGURED';
+
+export interface ComponentHealth {
+  status: HealthStatus;
+  latencyMs?: number;
+  info?: string;
+  error?: string;
+}
+
+export interface PlatformMonitoringOverview {
+  overallStatus: HealthStatus;
+  checkedAt: string;
+  process: {
+    uptimeSeconds: number;
+    nodeVersion: string;
+    environment: string;
+    memory: {
+      heapUsedMB: number;
+      heapTotalMB: number;
+      rssMB: number;
+    };
+  };
+  services: {
+    api: ComponentHealth;
+    postgresql: ComponentHealth;
+    redis: ComponentHealth;
+    queues: ComponentHealth;
+  };
+  security: {
+    totalEvents: number;
+    unresolvedEvents: number;
+    criticalIncidents: number;
+    activeSessions: number;
+  };
+  operations: {
+    auditLogs24h: number;
+    totalOrganisations: number;
+    activeOrganisations: number;
+  };
+  recentSecurityEvents: Array<{
+    id: string;
+    eventType: string;
+    severity: SecuritySeverity;
+    isResolved: boolean;
+    createdAt: string;
+    ipAddress?: string | null;
+  }>;
+  recentAuditLogs: Array<{
+    id: string;
+    action: string;
+    actorRole?: string | null;
+    createdAt: string;
+  }>;
+}
+

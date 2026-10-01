@@ -12,14 +12,16 @@ import { useAuthStore } from '../store/auth.store';
 export const usePermissions = () => {
   const user = useAuthStore((state) => state.user);
 
-  const isSuperAdmin = user?.role === 'PLATFORM_SUPER_ADMIN';
-  const isAdmin = user?.role === 'PLATFORM_ADMIN';
+  const isSuperAdmin =
+    user?.role === 'PLATFORM_SUPER_ADMIN' || (user?.role as string) === 'SUPER_ADMIN';
+  const isAdmin =
+    user?.role === 'PLATFORM_ADMIN' || (user?.role as string) === 'ADMIN';
 
   const hasPermission = (permission: string): boolean => {
     if (!user) return false;
     if (isSuperAdmin) return true; // Super admin has root platform access
     const permissions = (user as any).permissions || [];
-    return permissions.includes(permission) || permissions.includes('*');
+    return permissions.includes(permission);
   };
 
   const hasAnyPermission = (permissions: string[]): boolean => {

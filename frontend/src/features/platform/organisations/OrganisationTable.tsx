@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, Users, AlertCircle } from 'lucide-react';
+import { Eye, Users } from 'lucide-react';
 import { Organisation } from '../../../types/platform.types';
 import { OrganisationStatusBadge } from './OrganisationStatusBadge';
 import { usePermissions } from '../../../hooks/usePermissions';
@@ -14,8 +14,6 @@ import { usePermissions } from '../../../hooks/usePermissions';
 interface Props {
   organisations: Organisation[];
   loading: boolean;
-  error?: string | null;
-  onRetry?: () => void;
   onSuspendClick: (org: Organisation) => void;
   onActivateClick: (org: Organisation) => void;
 }
@@ -23,8 +21,6 @@ interface Props {
 export const OrganisationTable: React.FC<Props> = ({
   organisations,
   loading,
-  error,
-  onRetry,
   onSuspendClick,
   onActivateClick,
 }) => {
@@ -54,25 +50,6 @@ export const OrganisationTable: React.FC<Props> = ({
               <tr>
                 <td colSpan={7} className="py-8 text-center text-slate-500 font-sans">
                   Loading organisations...
-                </td>
-              </tr>
-            ) : error ? (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-rose-400 font-sans">
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <div className="flex items-center gap-2 font-medium">
-                      <AlertCircle className="w-4 h-4 text-rose-400" />
-                      <span>{error}</span>
-                    </div>
-                    {onRetry && (
-                      <button
-                        onClick={onRetry}
-                        className="mt-1 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs transition-colors"
-                      >
-                        Retry
-                      </button>
-                    )}
-                  </div>
                 </td>
               </tr>
             ) : organisations.length === 0 ? (

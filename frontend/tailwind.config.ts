@@ -1,23 +1,23 @@
-/** @type {import('tailwindcss').Config} */
+/** Shared colors resolve to the active Clyptus CSS design tokens. */
 export default {
-  darkMode: ['class'],
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
+    screens: { sm: '641px', md: '981px', lg: '1200px', xl: '1440px' },
     extend: {
+      fontFamily: { sans: ['var(--font-sans)'], serif: ['var(--font-heading)'], mono: ['var(--font-mono)'] },
+      borderRadius: { lg: '16px', xl: '16px', '2xl': '16px' },
       colors: {
-        platform: {
-          50: '#f0fdf4',
-          100: '#dcfce7',
-          500: '#22c55e',
-          600: '#16a34a',
-          900: '#14532d',
-          dark: '#0f172a',
-          card: '#1e293b',
-          border: '#334155',
-          accent: '#6366f1',
-          danger: '#ef4444',
-          warning: '#f59e0b',
-        },
+        canvas: 'var(--color-background)', surface: 'var(--color-surface)',
+        soft: 'var(--color-surface-alt)', strong: 'var(--color-surface-strong)',
+        ink: 'var(--color-text)', muted: 'var(--color-text-secondary)',
+        line: 'var(--color-border)', 'line-strong': 'var(--color-border-strong)',
+        brand: 'var(--color-primary)', 'brand-hover': 'var(--color-primary-hover)',
+        'brand-soft': 'var(--color-accent-soft)', action: 'var(--color-action)',
+        'action-hover': 'var(--color-action-hover)', 'on-action': 'var(--color-on-action)',
+        success: 'var(--color-success)', 'success-soft': 'var(--color-success-soft)',
+        danger: 'var(--color-error)', 'danger-soft': 'var(--color-error-soft)',
+        warning: 'var(--color-warning)', 'warning-soft': 'var(--color-warning-soft)',
+        overlay: 'var(--color-overlay)',
       },
     },
   },

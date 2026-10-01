@@ -1,70 +1,89 @@
-// ============================================================
-// Clyptus Job Portal - Platform Analytics View
-// Unified View for Platform Super Admin & Platform Admin.
-// Utilizes shared GeminiSummaryCard & AnalyticsCharts.
-// ============================================================
-
-import React, { useState, useEffect } from 'react';
-import { Calendar } from 'lucide-react';
-import { PlatformService } from '../../services/platform.service';
-import { GeminiSummaryCard } from '../../features/platform/analytics/GeminiSummaryCard';
+import React, { useState } from 'react';
 import { AnalyticsCharts } from '../../features/platform/analytics/AnalyticsCharts';
+import {
+  Page,
+  Metrics,
+  useResource,
+  ErrorBox,
+  inputClass,
+} from '../../components/platform/OperationsUI';
 
-export const Analytics: React.FC = () => {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+// ============================================================
+// Analytics page
+//
+// Backend returns (GET /api/v1/platform/analytics):
+//   {
+//     timeframe, statusDistribution, tierDistribution,
+//     transactionVolumeByType, organisationGrowthTrend, aiExecutiveSummary
+//   }
+//
+// There is NO .operations wrapper — the previous code crashed because
+// it read q.data.operations.metrics which is always undefined.
+// ============================================================
+
+export function Analytics() {
   const [timeframe, setTimeframe] = useState('30d');
-  const [error, setError] = useState<string | null>(null);
+  const q = useResource('analytics', { timeframe });
 
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-    PlatformService.getAnalytics(timeframe)
-      .then((res) => setData(res))
-      .catch((err: { message?: string }) => setError(err?.message || 'Could not load analytics.'))
-      .finally(() => setLoading(false));
-  }, [timeframe]);
-
-  // A failed request used to leave this "loading" forever.
-  if (error) {
-    return <div className="text-amber-300 text-sm">Analytics unavailable: {error}</div>;
-  }
-
-  if (loading || !data) {
-    return <div className="text-slate-400 text-sm">Aggregating platform telemetry...</div>;
+  // Derive summary metrics from the flat backend payload
+  function buildMetrics(data: any): Record<string, number> {
+    const totalOrgs = (data.statusDistribution ?? []).reduce(
+      (acc: number, s: any) => acc + (s.count ?? 0),
+      0,
+    );
+    const tiers = (data.tierDistribution ?? []).length;
+    const totalTokenVolume = (data.transactionVolumeByType ?? []).reduce(
+      (acc: number, t: any) => acc + (t.totalTokens ?? 0),
+      0,
+    );
+    const totalTxCount = (data.transactionVolumeByType ?? []).reduce(
+      (acc: number, t: any) => acc + (t.count ?? 0),
+      0,
+    );
+    return {
+      totalOrganisations: totalOrgs,
+      subscriptionTiers: tiers,
+      tokenVolumeInPeriod: totalTokenVolume,
+      transactionCount: totalTxCount,
+    };
   }
 
   return (
-    <div className="space-y-6">
-      {/* Title */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Platform Analytics & Intelligence</h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Macro-level multi-tenant velocity, consumption distribution, and AI intelligence synthesis.
+    <Page
+      title="Platform analytics"
+      description="Shared organization, user, token, and subscription insights."
+    >
+      <select
+        className={inputClass + ' max-w-xs'}
+        aria-label="Timeframe"
+        value={timeframe}
+        onChange={(e) => setTimeframe(e.target.value)}
+      >
+        {['7d', '30d', '90d'].map((t) => (
+          <option key={t}>{t}</option>
+        ))}
+      </select>
+
+      {q.isPending ? (
+        <p>Loading…</p>
+      ) : q.isError ? (
+        <ErrorBox error={q.error} retry={() => q.refetch()} />
+      ) : (
+        <>
+          <Metrics values={buildMetrics(q.data)} />
+          <p className="text-xs text-muted">
+            Summary counts are current totals; token volumes use the selected period. Organization
+            growth shows the last six months.
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-          <select
-            value={timeframe}
-            onChange={(e) => setTimeframe(e.target.value)}
-            className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
-          >
-            <option value="7d">Last 7 Days</option>
-            <option value="30d">Last 30 Days</option>
-            <option value="90d">Last 90 Days</option>
-          </select>
-        </div>
-      </div>
-
-      {/* GEMINI AI PLATFORM EXECUTIVE SUMMARY */}
-      {data.aiExecutiveSummary && (
-        <GeminiSummaryCard summary={data.aiExecutiveSummary} />
+          <AnalyticsCharts data={q.data} />
+          {q.data.aiExecutiveSummary && (
+            <div className="p-4 rounded-xl bg-surface border border-line text-sm text-muted whitespace-pre-wrap">
+              <p className="font-semibold text-ink mb-1">AI Executive Summary</p>
+              {q.data.aiExecutiveSummary}
+            </div>
+          )}
+        </>
       )}
-
-      {/* REUSABLE TELEMETRY CHARTS */}
-      <AnalyticsCharts data={data} />
-    </div>
+    </Page>
   );
-};
+}
