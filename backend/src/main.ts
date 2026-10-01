@@ -13,7 +13,7 @@ import { AuditService } from './modules/audit/audit.service';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true }); // rawBody: Razorpay webhook signature check (org portal)
 
   const configService = app.get(ConfigService);
   const auditService = app.get(AuditService);

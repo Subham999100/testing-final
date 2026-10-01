@@ -9,6 +9,7 @@ import { PrismaModule } from './database/prisma.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { PlatformModule } from './modules/platform/platform.module';
+import { OrgModule } from './modules/org/org.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { PlatformModule } from './modules/platform/platform.module';
     AuditModule,
     IntegrationsModule,
     PlatformModule,
+    OrgModule,
   ],
 })
 export class AppModule {}

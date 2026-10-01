@@ -25,12 +25,31 @@ export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [data, setData] = useState<PlatformDashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     PlatformService.getDashboardSummary()
       .then((res) => setData(res))
+      .catch((err: { message?: string }) => setError(err?.message || 'Could not load the dashboard.'))
       .finally(() => setLoading(false));
   }, []);
+
+  // Without this, a failed request (e.g. 403 for an admin lacking platform.analytics.read) spun forever.
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-center">
+        <AlertTriangle className="w-6 h-6 text-amber-400 mb-3" />
+        <p className="text-sm font-semibold text-white">Dashboard unavailable</p>
+        <p className="text-xs text-slate-400 mt-1 max-w-sm">{error}</p>
+        <button
+          onClick={() => navigate('/platform/organisations')}
+          className="mt-4 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700"
+        >
+          Go to Organisations
+        </button>
+      </div>
+    );
+  }
 
   if (loading || !data) {
     return (

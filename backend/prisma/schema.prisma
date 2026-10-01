@@ -25,6 +25,7 @@ model User {
   securityEvents       SecurityEvent[]       @relation("ActorSecurityEvents")
   tokenTransactions    TokenTransaction[]    @relation("ActorTokenTransactions")
   organisation         Organisation?         @relation(fields: [organisationId], references: [id])
+  orgMemberProfile     OrgMemberProfile?
 
   @@index([role])
   @@index([organisationId])
@@ -152,6 +153,7 @@ model TokenTransaction {
   referenceId    String?
   reason         String?
   metadata       Json?                @default("{}")
+  idempotencyKey String?              @unique
   createdAt      DateTime             @default(now())
   actor          User?                @relation("ActorTokenTransactions", fields: [actorId], references: [id])
   organisation   Organisation         @relation(fields: [organisationId], references: [id], onDelete: Restrict)
@@ -274,4 +276,556 @@ enum SecuritySeverity {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+// ============================================================
+// ORGANISATION PORTAL (Org Super Admin Â· Org Admin Â· Recruiter)
+// Additive models only. Tenant scoping is enforced in the service
+// layer: every query filters by organisationId from the session.
+// ============================================================
+
+enum OrgMemberStatus {
+  ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+}
+
+enum JobStatus {
+  DRAFT
+  IN_REVIEW
+  PUBLISHED
+  PAUSED
+  CLOSED
+  ARCHIVED
+}
+
+enum WorkMode {
+  ONSITE
+  REMOTE
+  HYBRID
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+}
+
+enum ApplicationStage {
+  APPLIED
+  SCREENING
+  SHORTLISTED
+  INTERVIEW
+  OFFER
+  HIRED
+  REJECTED
+  WITHDRAWN
+}
+
+enum InterviewMode {
+  VIDEO
+  PHONE
+  ONSITE
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  FEEDBACK_PENDING
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum FeedbackRecommendation {
+  STRONG_YES
+  YES
+  NO
+  STRONG_NO
+}
+
+enum OfferStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  WITHDRAWN
+}
+
+enum MemberTokenEntryType {
+  ALLOCATE
+  DEALLOCATE
+  CONSUME
+  REFUND
+}
+
+enum TokenReservationStatus {
+  HELD
+  COMMITTED
+  RELEASED
+}
+
+enum PaymentStatus {
+  CREATED
+  PAID
+  FAILED
+}
+
+enum AiRunStatus {
+  SUCCEEDED
+  FAILED
+}
+
+enum TaskStatus {
+  OPEN
+  DONE
+}
+
+model OrgMemberProfile {
+  id                     String          @id @default(uuid())
+  userId                 String          @unique
+  organisationId         String
+  status                 OrgMemberStatus @default(ACTIVE)
+  permissions            String[]        @default([])
+  title                  String?
+  timezone               String          @default("UTC")
+  mutedNotificationTypes String[]        @default([])
+  invitedById            String?
+  joinedAt               DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  user                   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, status])
+  @@map("org_member_profiles")
+}
+
+model OrgSettings {
+  id                    String   @id @default(uuid())
+  organisationId        String   @unique
+  jobApprovalRequired   Boolean  @default(false)
+  offerApprovalRequired Boolean  @default(true)
+  rejectReasonRequired  Boolean  @default(true)
+  messageOversight      Boolean  @default(false)
+  aiEnabled             Boolean  @default(true)
+  lowBalanceThreshold   Int      @default(200)
+  tokenConfirmThreshold Int      @default(20)
+  updatedById           String?
+  updatedAt             DateTime @updatedAt
+
+  @@map("org_settings")
+}
+
+model OrgInvitation {
+  id             String           @id @default(uuid())
+  organisationId String
+  email          String
+  role           UserRole
+  permissions    String[]         @default([])
+  tokenHash      String           @unique
+  status         InvitationStatus @default(PENDING)
+  expiresAt      DateTime
+  invitedById    String
+  acceptedUserId String?
+  acceptedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([organisationId, status])
+  @@index([email])
+  @@map("org_invitations")
+}
+
+model Job {
+  id                 String          @id @default(uuid())
+  organisationId     String
+  title              String
+  description        String
+  responsibilities   String?
+  requiredSkills     String[]        @default([])
+  preferredSkills    String[]        @default([])
+  experienceMin      Int?
+  experienceMax      Int?
+  salaryMin          Int?
+  salaryMax          Int?
+  currency           String          @default("INR")
+  location           String?
+  workMode           WorkMode        @default(ONSITE)
+  employmentType     EmploymentType  @default(FULL_TIME)
+  education          String?
+  industry           String?
+  department         String?
+  openings           Int             @default(1)
+  deadline           DateTime?
+  screeningQuestions String[]        @default([])
+  status             JobStatus       @default(DRAFT)
+  reviewNote         String?
+  createdById        String
+  approvedById       String?
+  publishedAt        DateTime?
+  closedAt           DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  assignments        JobAssignment[]
+  applications       Application[]
+
+  @@index([organisationId, status])
+  @@index([organisationId, createdById])
+  @@map("jobs")
+}
+
+model JobAssignment {
+  id             String   @id @default(uuid())
+  organisationId String
+  jobId          String
+  userId         String
+  createdAt      DateTime @default(now())
+  job            Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, userId])
+  @@index([organisationId, userId])
+  @@map("job_assignments")
+}
+
+model Candidate {
+  id              String             @id @default(uuid())
+  organisationId  String
+  firstName       String
+  lastName        String
+  email           String
+  phone           String?
+  headline        String?
+  location        String?
+  experienceYears Int?
+  currentCompany  String?
+  skills          String[]           @default([])
+  resumeText      String?
+  resumeUrl       String?
+  source          String?
+  createdById     String
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  applications    Application[]
+  notes           CandidateNote[]
+  saved           SavedCandidate[]
+  messages        CandidateMessage[]
+
+  @@unique([organisationId, email])
+  @@index([organisationId, createdAt])
+  @@map("candidates")
+}
+
+model CandidateNote {
+  id             String    @id @default(uuid())
+  organisationId String
+  candidateId    String
+  applicationId  String?
+  authorId       String
+  body           String
+  createdAt      DateTime  @default(now())
+  candidate      Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, candidateId])
+  @@map("candidate_notes")
+}
+
+model SavedCandidate {
+  id             String    @id @default(uuid())
+  organisationId String
+  userId         String
+  candidateId    String
+  createdAt      DateTime  @default(now())
+  candidate      Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, candidateId])
+  @@index([organisationId, userId])
+  @@map("saved_candidates")
+}
+
+model Application {
+  id             String                    @id @default(uuid())
+  organisationId String
+  jobId          String
+  candidateId    String
+  stage          ApplicationStage          @default(APPLIED)
+  assignedToId   String?
+  rejectReason   String?
+  matchScore     Int?
+  source         String?
+  createdById    String
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  job            Job                       @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  candidate      Candidate                 @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  history        ApplicationStageHistory[]
+  interviews     Interview[]
+  offers         Offer[]
+
+  @@unique([jobId, candidateId])
+  @@index([organisationId, stage])
+  @@index([organisationId, jobId])
+  @@index([organisationId, assignedToId])
+  @@map("applications")
+}
+
+model ApplicationStageHistory {
+  id             String            @id @default(uuid())
+  organisationId String
+  applicationId  String
+  fromStage      ApplicationStage?
+  toStage        ApplicationStage
+  actorId        String
+  reason         String?
+  createdAt      DateTime          @default(now())
+  application    Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, createdAt])
+  @@index([applicationId])
+  @@map("application_stage_history")
+}
+
+model Interview {
+  id              String                 @id @default(uuid())
+  organisationId  String
+  applicationId   String
+  title           String
+  scheduledAt     DateTime
+  durationMinutes Int                    @default(45)
+  mode            InterviewMode          @default(VIDEO)
+  location        String?
+  status          InterviewStatus        @default(SCHEDULED)
+  notes           String?
+  createdById     String
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  application     Application            @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  interviewers    InterviewInterviewer[]
+  feedback        InterviewFeedback[]
+
+  @@index([organisationId, scheduledAt])
+  @@index([applicationId])
+  @@map("interviews")
+}
+
+model InterviewInterviewer {
+  id          String    @id @default(uuid())
+  interviewId String
+  userId      String
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@unique([interviewId, userId])
+  @@index([userId])
+  @@map("interview_interviewers")
+}
+
+model InterviewFeedback {
+  id             String                 @id @default(uuid())
+  organisationId String
+  interviewId    String
+  authorId       String
+  rating         Int
+  recommendation FeedbackRecommendation
+  strengths      String?
+  concerns       String?
+  notes          String?
+  createdAt      DateTime               @default(now())
+  interview      Interview              @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@unique([interviewId, authorId])
+  @@map("interview_feedback")
+}
+
+model Offer {
+  id             String         @id @default(uuid())
+  organisationId String
+  applicationId  String
+  title          String
+  salary         Int
+  currency       String         @default("INR")
+  joiningDate    DateTime?
+  expiresAt      DateTime?
+  notes          String?
+  status         OfferStatus    @default(DRAFT)
+  createdById    String
+  approvedById   String?
+  sentAt         DateTime?
+  respondedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  application    Application    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  history        OfferHistory[]
+
+  @@index([organisationId, status])
+  @@index([applicationId])
+  @@map("offers")
+}
+
+model OfferHistory {
+  id         String       @id @default(uuid())
+  offerId    String
+  fromStatus OfferStatus?
+  toStatus   OfferStatus
+  actorId    String
+  note       String?
+  createdAt  DateTime     @default(now())
+  offer      Offer        @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@index([offerId])
+  @@map("offer_history")
+}
+
+model TokenAllocation {
+  id             String   @id @default(uuid())
+  organisationId String
+  userId         String
+  allocated      Int      @default(0)
+  consumed       Int      @default(0)
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organisationId, userId])
+  @@map("token_allocations")
+}
+
+model MemberTokenEntry {
+  id             String               @id @default(uuid())
+  organisationId String
+  userId         String
+  actorId        String
+  type           MemberTokenEntryType
+  amount         Int
+  reason         String?
+  referenceId    String?
+  createdAt      DateTime             @default(now())
+
+  @@index([organisationId, userId, createdAt])
+  @@map("member_token_entries")
+}
+
+model TokenReservation {
+  id             String                 @id @default(uuid())
+  organisationId String
+  userId         String
+  feature        String
+  amount         Int
+  fromAllocation Boolean                @default(false)
+  status         TokenReservationStatus @default(HELD)
+  idempotencyKey String                 @unique
+  referenceId    String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([organisationId, status])
+  @@map("token_reservations")
+}
+
+model OrgPayment {
+  id                String        @id @default(uuid())
+  organisationId    String
+  planId            String
+  planName          String
+  tokens            Int
+  amount            Int
+  currency          String
+  status            PaymentStatus @default(CREATED)
+  razorpayOrderId   String        @unique
+  razorpayPaymentId String?       @unique
+  invoiceNumber     String?       @unique
+  failureReason     String?
+  createdById       String
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([organisationId, createdAt])
+  @@map("org_payments")
+}
+
+model AiRun {
+  id             String      @id @default(uuid())
+  organisationId String
+  userId         String
+  feature        String
+  status         AiRunStatus
+  tokens         Int
+  referenceId    String?
+  output         Json?
+  explanation    Json?
+  error          String?
+  createdAt      DateTime    @default(now())
+
+  @@index([organisationId, createdAt])
+  @@map("ai_runs")
+}
+
+model CandidateMessage {
+  id             String    @id @default(uuid())
+  organisationId String
+  candidateId    String
+  senderId       String
+  subject        String?
+  body           String
+  createdAt      DateTime  @default(now())
+  candidate      Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, candidateId, createdAt])
+  @@map("candidate_messages")
+}
+
+model OrgNotification {
+  id             String    @id @default(uuid())
+  organisationId String
+  userId         String
+  type           String
+  title          String
+  body           String?
+  link           String?
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([userId, readAt, createdAt])
+  @@map("org_notifications")
+}
+
+model OrgTask {
+  id             String     @id @default(uuid())
+  organisationId String
+  title          String
+  description    String?
+  dueAt          DateTime?
+  status         TaskStatus @default(OPEN)
+  assigneeId     String
+  createdById    String
+  relatedType    String?
+  relatedId      String?
+  completedAt    DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([organisationId, assigneeId, status])
+  @@map("org_tasks")
+}
+
+model OrgIntegration {
+  id              String   @id @default(uuid())
+  organisationId  String
+  provider        String
+  label           String
+  encryptedSecret String
+  secretLast4     String
+  enabled         Boolean  @default(true)
+  updatedById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organisationId, provider])
+  @@map("org_integrations")
 }

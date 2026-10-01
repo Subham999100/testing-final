@@ -14,13 +14,21 @@ export const Analytics: React.FC = () => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [timeframe, setTimeframe] = useState('30d');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
+    setError(null);
     PlatformService.getAnalytics(timeframe)
       .then((res) => setData(res))
+      .catch((err: { message?: string }) => setError(err?.message || 'Could not load analytics.'))
       .finally(() => setLoading(false));
   }, [timeframe]);
+
+  // A failed request used to leave this "loading" forever.
+  if (error) {
+    return <div className="text-amber-300 text-sm">Analytics unavailable: {error}</div>;
+  }
 
   if (loading || !data) {
     return <div className="text-slate-400 text-sm">Aggregating platform telemetry...</div>;

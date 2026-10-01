@@ -19,6 +19,9 @@ import { AuditLogs } from '../pages/platform/AuditLogs';
 import { Security } from '../pages/platform/Security';
 import { Settings } from '../pages/platform/Settings';
 
+// Organisation portal (Org Super Admin · Org Admin · Recruiter) — lazy-loaded, lives under /org/*
+const OrgPortal = React.lazy(() => import('../portals/org/OrgPortal'));
+
 export const AppRoutes: React.FC = () => {
   return (
     <Routes>
@@ -41,6 +44,9 @@ export const AppRoutes: React.FC = () => {
           <Route path="settings" element={<Settings />} />
         </Route>
       </Route>
+
+      {/* ORGANISATION PORTAL */}
+      <Route path="/org/*" element={<React.Suspense fallback={null}><OrgPortal /></React.Suspense>} />
 
       {/* Root & Fallback Redirects */}
       <Route path="/" element={<Navigate to="/platform" replace />} />

@@ -9,10 +9,12 @@ import { X, Users2, Shield } from 'lucide-react';
 
 export const AVAILABLE_PERMISSIONS = [
   { key: 'platform.organisations.read', label: 'View Organisations' },
+  { key: 'platform.organisations.create', label: 'Create Organisations' },
   { key: 'platform.organisations.update', label: 'Update Organisations' },
   { key: 'platform.organisations.suspend', label: 'Suspend / Activate Organisations' },
   { key: 'platform.tokens.read', label: 'View Token Ledger' },
   { key: 'platform.tokens.manage', label: 'Manage Token Plans' },
+  { key: 'platform.tokens.allocate', label: 'Allocate Tokens to Organisations' },
   { key: 'platform.tokens.adjust', label: 'Adjust Organisation Tokens' },
   { key: 'platform.analytics.read', label: 'View Platform Analytics' },
   { key: 'platform.audit.read', label: 'Read Central Audit Logs' },
@@ -38,7 +40,8 @@ export const CreatePlatformAdminModal: React.FC<Props> = ({
     email: '',
     password: '',
     department: 'Operations',
-    permissions: ['platform.organisations.read', 'platform.audit.read'],
+    // analytics.read is needed to load the platform dashboard (the admin's landing page).
+    permissions: ['platform.organisations.read', 'platform.analytics.read', 'platform.audit.read'],
   });
 
   if (!isOpen) return null;

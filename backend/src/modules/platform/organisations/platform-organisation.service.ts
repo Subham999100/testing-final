@@ -170,7 +170,10 @@ export class PlatformOrganisationService {
       membersCount: org._count.users,
       totalTransactions: org._count.tokenTransactions,
       metadata: org.metadata,
-      tokenBalance: org.tokenBalance,
+      // Flattened to numbers, same shape as findAll (the UI renders these directly).
+      tokenBalance: org.tokenBalance?.balance || 0,
+      allocatedTokens: org.tokenBalance?.allocatedTokens || 0,
+      consumedTokens: org.tokenBalance?.consumedTokens || 0,
       allocationLimit: org.allocationLimit,
       recentActivity,
     };
