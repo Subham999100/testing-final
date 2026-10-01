@@ -53,9 +53,13 @@ export function LoginPage() {
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
     try {
-      await login(values.email, values.password);
+      const res = await login(values.email, values.password);
       qc.clear();
-      navigate(state?.from && state.from.startsWith('/org') ? state.from : '/org', { replace: true });
+      if (res?.requiresPasswordChange) {
+        navigate('/org/change-password', { replace: true });
+      } else {
+        navigate(state?.from && state.from.startsWith('/org') && !state.from.startsWith('/org/change-password') ? state.from : '/org', { replace: true });
+      }
     } catch (e) {
       setError(errorMessage(e, 'Could not sign in'));
     }
@@ -73,6 +77,78 @@ export function LoginPage() {
         </Field>
         <Button type="submit" className="w-full" loading={formState.isSubmitting}>
           Sign in
+        </Button>
+      </form>
+    </AuthLayout>
+  );
+}
+
+const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Enter your current password'),
+    newPassword: z
+      .string()
+      .min(10, 'At least 10 characters')
+      .regex(/[A-Za-z]/, 'Include a letter')
+      .regex(/\d/, 'Include a number'),
+    confirmPassword: z.string(),
+  })
+  .refine((v) => v.newPassword === v.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'Passwords do not match',
+  })
+  .refine((v) => v.currentPassword !== v.newPassword, {
+    path: ['newPassword'],
+    message: 'New password must be different from current password',
+  });
+
+export function ChangePasswordPage() {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const { register, handleSubmit, formState } = useForm<z.infer<typeof changePasswordSchema>>({
+    resolver: zodResolver(changePasswordSchema),
+  });
+
+  if (!getToken()) return <Navigate to="/org/login" replace />;
+
+  const onSubmit = handleSubmit(async (v) => {
+    setError(null);
+    try {
+      await api.post('/org/auth/change-password', {
+        currentPassword: v.currentPassword,
+        newPassword: v.newPassword,
+        confirmPassword: v.confirmPassword,
+      });
+      await qc.invalidateQueries();
+      navigate('/org', { replace: true });
+    } catch (e) {
+      setError(errorMessage(e, 'Could not change password'));
+    }
+  });
+
+  return (
+    <AuthLayout
+      title="Change Your Password"
+      subtitle="For security, you must change your password before accessing your workspace."
+    >
+      <form onSubmit={onSubmit} className="space-y-4" noValidate>
+        {error && <div className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>}
+        <Field label="Current Password" error={formState.errors.currentPassword?.message}>
+          <Input type="password" autoComplete="current-password" autoFocus {...register('currentPassword')} />
+        </Field>
+        <Field
+          label="New Password"
+          error={formState.errors.newPassword?.message}
+          hint="10+ characters with letters and numbers"
+        >
+          <Input type="password" autoComplete="new-password" {...register('newPassword')} />
+        </Field>
+        <Field label="Confirm New Password" error={formState.errors.confirmPassword?.message}>
+          <Input type="password" autoComplete="new-password" {...register('confirmPassword')} />
+        </Field>
+        <Button type="submit" className="w-full" loading={formState.isSubmitting}>
+          Change Password
         </Button>
       </form>
     </AuthLayout>

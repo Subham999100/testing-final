@@ -111,6 +111,19 @@ export class PlatformOrganisationController {
     return this.organisationService.activate(id, actor, ipAddress, userAgent);
   }
 
+  @Post(':id/super-admin/reset-password')
+  @RequirePermissions(PlatformPermissions.ORGANISATIONS_UPDATE)
+  @HttpCode(HttpStatus.OK)
+  async resetSuperAdminPassword(
+    @Param('id') id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Req() req: Request,
+  ) {
+    const ipAddress = (req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress) as string;
+    const userAgent = req.headers['user-agent'];
+    return this.organisationService.resetSuperAdminPassword(id, actor, ipAddress, userAgent);
+  }
+
   @Delete(':id')
   @RequirePermissions(PlatformPermissions.ORGANISATIONS_DELETE)
   @HttpCode(HttpStatus.OK)

@@ -11,7 +11,7 @@ import './org.css';
 import { OrgShell } from './layout/OrgShell';
 import { loaders } from './layout/nav';
 import { usePermissions } from './lib/session';
-import { AcceptInvitePage, LoginPage } from './pages/auth';
+import { AcceptInvitePage, ChangePasswordPage, LoginPage } from './pages/auth';
 import { Button, EmptyState, PageSkeleton } from './ui/ui';
 
 type Loader = () => Promise<Record<string, unknown>>;
@@ -104,6 +104,7 @@ export default function OrgPortal() {
     <Routes>
       <Route path="login" element={<LoginPage />} />
       <Route path="accept-invite" element={<AcceptInvitePage />} />
+      <Route path="change-password" element={<ChangePasswordPage />} />
       <Route element={<OrgShell />}>
         <Route index element={<Guard><Dashboard /></Guard>} />
         <Route path="jobs" element={<Guard perms={P.jobs}><Jobs /></Guard>} />

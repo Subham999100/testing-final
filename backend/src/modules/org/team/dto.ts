@@ -33,6 +33,21 @@ export class OrgLoginDto {
 
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d).{10,}$/;
 
+export class ChangePasswordDto {
+  @IsString()
+  @IsNotEmpty()
+  currentPassword: string;
+
+  @IsString()
+  @Matches(PASSWORD_RULE, { message: 'Password must be at least 10 characters and include letters and numbers' })
+  @MaxLength(200)
+  newPassword: string;
+
+  @IsString()
+  @IsOptional()
+  confirmPassword?: string;
+}
+
 export class AcceptInvitationDto {
   @IsString()
   @IsNotEmpty()
@@ -141,15 +156,4 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(60)
   timezone?: string;
-}
-
-export class ChangePasswordDto {
-  @IsString()
-  @IsNotEmpty()
-  currentPassword: string;
-
-  @IsString()
-  @Matches(PASSWORD_RULE, { message: 'Password must be at least 10 characters and include letters and numbers' })
-  @MaxLength(200)
-  newPassword: string;
 }

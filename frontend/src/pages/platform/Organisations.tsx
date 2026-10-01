@@ -20,6 +20,7 @@ export const Organisations: React.FC = () => {
 
   const [organisations, setOrganisations] = useState<Organisation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
@@ -31,11 +32,23 @@ export const Organisations: React.FC = () => {
 
   const loadOrganisations = () => {
     setLoading(true);
+    setError(null);
     PlatformService.getOrganisations({
       search: search || undefined,
       status: statusFilter !== 'ALL' ? statusFilter : undefined,
     })
-      .then((res) => setOrganisations(res.data))
+      .then((res) => {
+        setOrganisations(res.data);
+        setError(null);
+      })
+      .catch((err: any) => {
+        const errorMsg =
+          err?.response?.data?.message ||
+          err?.message ||
+          'Failed to load organisations. Please check your authentication permissions.';
+        setError(Array.isArray(errorMsg) ? errorMsg.join(', ') : errorMsg);
+        setOrganisations([]);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -48,17 +61,10 @@ export const Organisations: React.FC = () => {
     loadOrganisations();
   };
 
-  const handleCreateSubmit = async (formData: any) => {
-    setIsSubmitting(true);
-    try {
-      await PlatformService.createOrganisation(formData);
-      setShowCreateModal(false);
-      loadOrganisations();
-    } catch (err: any) {
-      alert(`Error creating organisation: ${err.message || 'Operation failed'}`);
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleCreateSubmit = async () => {
+    // Organisation creation is now handled inside the 2-step wizard modal.
+    // This callback is called after the org is created so the list refreshes.
+    loadOrganisations();
   };
 
   const handleSuspendConfirm = async () => {
@@ -121,6 +127,8 @@ export const Organisations: React.FC = () => {
       <OrganisationTable
         organisations={organisations}
         loading={loading}
+        error={error}
+        onRetry={loadOrganisations}
         onSuspendClick={(org) => setSuspendModalOrg(org)}
         onActivateClick={handleActivate}
       />
@@ -140,11 +148,9 @@ export const Organisations: React.FC = () => {
         />
       )}
 
-      {/* Create Modal */}
       {showCreateModal && (
         <CreateOrganisationModal
-          isSubmitting={isSubmitting}
-          onSubmit={handleCreateSubmit}
+          onOrganisationCreated={handleCreateSubmit}
           onClose={() => setShowCreateModal(false)}
         />
       )}

@@ -19,6 +19,9 @@ import { PlatformAuthService, LoginResult } from './platform-auth.service';
 import { PlatformLoginDto } from './dto/platform-login.dto';
 import { RateLimiterGuard, RateLimit } from '../../../common/guards/rate-limiter.guard';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 
@@ -39,9 +42,9 @@ export class PlatformAuthController {
     return this.authService.login(dto, ipAddress, userAgent);
   }
 
-
   @Post('logout')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.PLATFORM_SUPER_ADMIN, UserRole.PLATFORM_ADMIN)
   @HttpCode(HttpStatus.OK)
   async logout(
     @CurrentUser() actor: AuthenticatedUser,
@@ -53,7 +56,8 @@ export class PlatformAuthController {
   }
 
   @Get('me')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.PLATFORM_SUPER_ADMIN, UserRole.PLATFORM_ADMIN)
   async getMe(@CurrentUser() actor: AuthenticatedUser) {
     return this.authService.getMe(actor);
   }

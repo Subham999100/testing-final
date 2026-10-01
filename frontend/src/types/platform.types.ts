@@ -23,6 +23,16 @@ export type TokenTransactionType =
 
 export type SecuritySeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
+export interface OrganisationSuperAdminSummary {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  isActive: boolean;
+  status: 'ACTIVE' | 'INACTIVE';
+  createdAt: string;
+}
+
 export interface Organisation {
   id: string;
   name: string;
@@ -44,6 +54,7 @@ export interface Organisation {
   industry?: string | null;
   companySize?: string | null;
   website?: string | null;
+  superAdmin?: OrganisationSuperAdminSummary | null;
 }
 
 export interface PlatformAdminUser {

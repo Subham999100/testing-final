@@ -10,7 +10,9 @@ import {
   IsOptional,
   IsInt,
   Min,
+  MinLength,
   Matches,
+  MaxLength,
 } from 'class-validator';
 
 export class CreateOrganisationDto {
@@ -61,4 +63,23 @@ export class CreateOrganisationDto {
   @Min(0)
   @IsOptional()
   initialTokenAllocation?: number;
+
+  // ── Initial Organisation Super Admin ──────────────────────────
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  superAdminName: string;
+
+  @IsEmail()
+  @IsNotEmpty()
+  superAdminEmail: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(8, { message: 'Initial password must be at least 8 characters long' })
+  superAdminPassword: string;
+
+  @IsString()
+  @IsNotEmpty()
+  superAdminPasswordConfirmation: string;
 }

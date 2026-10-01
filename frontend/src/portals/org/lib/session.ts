@@ -9,7 +9,7 @@ import { useCallback, useMemo } from 'react';
 import { api, Me, Wallet } from './api';
 import { qk, STALE } from './queryKeys';
 
-export const TOKEN_KEY = 'clyptus_token';
+export const TOKEN_KEY = 'clyptus_org_token';
 
 export const getToken = () => {
   try {
@@ -47,8 +47,9 @@ export function useWallet() {
 }
 
 export async function login(email: string, password: string) {
-  const res = await api.post<{ accessToken: string }>('/org/auth/login', { email, password });
+  const res = await api.post<{ accessToken: string; requiresPasswordChange?: boolean }>('/org/auth/login', { email, password });
   localStorage.setItem(TOKEN_KEY, res.accessToken);
+  return res;
 }
 
 export function useLogout() {

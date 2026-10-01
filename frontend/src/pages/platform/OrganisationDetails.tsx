@@ -17,15 +17,18 @@ import {
   AlertOctagon,
   Calendar,
   Layers,
+  KeyRound,
 } from 'lucide-react';
 import { PlatformService } from '../../services/platform.service';
 import { Organisation } from '../../types/platform.types';
+import { ResetSuperAdminPasswordModal } from '../../features/platform/organisations/ResetSuperAdminPasswordModal';
 
 export const OrganisationDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [org, setOrg] = useState<Organisation | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -158,6 +161,71 @@ export const OrganisationDetails: React.FC = () => {
         </div>
       </div>
 
+      {/* ORGANISATION ACCESS / SUPER ADMIN */}
+      <div className="p-5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-white">Organisation Access</h2>
+              <p className="text-[11px] text-slate-400">Tenant administrative credentials & recovery</p>
+            </div>
+          </div>
+        </div>
+
+        {org.superAdmin ? (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg bg-slate-800/40 border border-slate-800">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs flex-1">
+              <div>
+                <span className="text-slate-500 text-[10px] uppercase font-semibold block tracking-wider">
+                  Super Admin
+                </span>
+                <span className="font-semibold text-white mt-0.5 block">{org.superAdmin.name}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 text-[10px] uppercase font-semibold block tracking-wider">
+                  Email
+                </span>
+                <span className="font-mono text-slate-200 mt-0.5 block">{org.superAdmin.email}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 text-[10px] uppercase font-semibold block tracking-wider">
+                  Role
+                </span>
+                <span className="font-mono text-indigo-300 mt-0.5 block">{org.superAdmin.role}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 text-[10px] uppercase font-semibold block tracking-wider">
+                  Status
+                </span>
+                <span
+                  className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold mt-0.5 ${
+                    org.superAdmin.status === 'ACTIVE'
+                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                      : 'bg-rose-500/15 text-rose-400 border border-rose-500/20'
+                  }`}
+                >
+                  {org.superAdmin.status}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowResetPasswordModal(true)}
+              className="px-3.5 py-2 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 hover:text-amber-200 text-xs font-semibold border border-amber-500/30 transition-colors flex items-center justify-center gap-1.5 shrink-0"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              Reset Password
+            </button>
+          </div>
+        ) : (
+          <div className="p-4 rounded-lg bg-slate-800/20 border border-slate-800 text-slate-400 text-xs flex items-center justify-between">
+            <span>No Organisation Super Admin configured for this organisation.</span>
+          </div>
+        )}
+      </div>
+
       {/* QUICK ACTIONS */}
       <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800 flex items-center justify-between">
         <span className="text-xs text-slate-400">
@@ -178,6 +246,16 @@ export const OrganisationDetails: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* RESET SUPER ADMIN PASSWORD MODAL */}
+      {showResetPasswordModal && org.superAdmin && (
+        <ResetSuperAdminPasswordModal
+          organisationId={org.id}
+          organisationName={org.name}
+          superAdmin={org.superAdmin}
+          onClose={() => setShowResetPasswordModal(false)}
+        />
+      )}
     </div>
   );
 };

@@ -6,7 +6,7 @@
 // - login() → POST /platform/auth/login (validates credentials, creates session)
 // - logout() → POST /platform/auth/logout (revokes session server-side)
 // - initAuth() → GET /platform/auth/me (validates session on app reload)
-// The JWT is stored in localStorage under 'clyptus_token'.
+// The JWT is stored in localStorage under 'clyptus_platform_token'.
 // The backend's JwtAuthGuard validates every request against the session DB.
 // ============================================================
 
@@ -36,6 +36,8 @@ interface AuthState {
   clearLoginError: () => void;
 }
 
+const PLATFORM_TOKEN_KEY = 'clyptus_platform_token';
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isInitializing: true,
@@ -44,7 +46,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   notificationsCount: 0,
 
   initAuth: async () => {
-    const token = localStorage.getItem('clyptus_token');
+    const token = localStorage.getItem(PLATFORM_TOKEN_KEY);
     if (!token) {
       set({ user: null, isInitializing: false });
       return;
@@ -67,8 +69,8 @@ export const useAuthStore = create<AuthState>((set) => ({
         isInitializing: false,
       });
     } catch {
-      // Invalid/expired/revoked session
-      localStorage.removeItem('clyptus_token');
+      // Invalid/expired/revoked session or unauthorized role
+      localStorage.removeItem(PLATFORM_TOKEN_KEY);
       set({ user: null, isInitializing: false });
     }
   },
@@ -79,8 +81,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       const res: any = await apiClient.post('/platform/auth/login', { email, password });
       const data = res.data || res;
 
-      // Store the JWT so the request interceptor in api.ts attaches it
-      localStorage.setItem('clyptus_token', data.accessToken);
+      // Store the platform JWT
+      localStorage.setItem(PLATFORM_TOKEN_KEY, data.accessToken);
 
       set({
         user: {
@@ -96,7 +98,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         loginError: null,
       });
     } catch (err: any) {
-      localStorage.removeItem('clyptus_token');
+      localStorage.removeItem(PLATFORM_TOKEN_KEY);
       set({
         user: null,
         isLoggingIn: false,
@@ -113,7 +115,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch {
       // Even if the network call fails, clear the local session
     } finally {
-      localStorage.removeItem('clyptus_token');
+      localStorage.removeItem(PLATFORM_TOKEN_KEY);
       set({ user: null, loginError: null, notificationsCount: 0 });
     }
   },

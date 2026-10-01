@@ -46,9 +46,12 @@ export const PlatformService = {
     return res.data || res;
   },
 
-  async createOrganisation(payload: any): Promise<Organisation> {
+  async createOrganisation(payload: any): Promise<{
+    organisation: Organisation;
+    superAdmin: { id: string; name: string; email: string; role: string };
+  }> {
     const res: any = await apiClient.post('/platform/organisations', payload);
-    return res.data || res;
+    return res;
   },
 
   async suspendOrganisation(id: string, reason: string): Promise<Organisation> {
@@ -58,6 +61,14 @@ export const PlatformService = {
 
   async activateOrganisation(id: string): Promise<Organisation> {
     const res: any = await apiClient.post(`/platform/organisations/${id}/activate`);
+    return res.data || res;
+  },
+
+  async resetSuperAdminPassword(organisationId: string): Promise<{
+    superAdmin: { id: string; name: string; email: string; role: string };
+    temporaryPassword: string;
+  }> {
+    const res: any = await apiClient.post(`/platform/organisations/${organisationId}/super-admin/reset-password`);
     return res.data || res;
   },
 

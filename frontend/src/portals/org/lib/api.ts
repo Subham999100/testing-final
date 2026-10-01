@@ -81,7 +81,7 @@ export type JobStatus = 'DRAFT' | 'IN_REVIEW' | 'PUBLISHED' | 'PAUSED' | 'CLOSED
 export type Stage = 'APPLIED' | 'SCREENING' | 'SHORTLISTED' | 'INTERVIEW' | 'OFFER' | 'HIRED' | 'REJECTED' | 'WITHDRAWN';
 
 export interface Me {
-  user: { id: string; email: string; firstName: string; lastName: string; role: OrgRole; title: string | null; timezone: string };
+  user: { id: string; email: string; firstName: string; lastName: string; role: OrgRole; title: string | null; timezone: string; mustChangePassword?: boolean };
   organisation: { id: string; name: string; slug: string; status: string; tier: string; maxRecruiters: number; logoUrl: string | null };
   permissions: string[];
   unreadNotifications: number;

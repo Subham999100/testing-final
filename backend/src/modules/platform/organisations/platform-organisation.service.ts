@@ -19,6 +19,8 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 import { PrismaService } from '../../../database/prisma.service';
 import { AuditService } from '../../audit/audit.service';
 import { CreateOrganisationDto } from './dto/create-organisation.dto';
@@ -26,7 +28,8 @@ import { UpdateOrganisationDto } from './dto/update-organisation.dto';
 import { SuspendOrganisationDto } from './dto/suspend-organisation.dto';
 import { QueryOrganisationDto } from './dto/query-organisation.dto';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
-import { OrganisationStatus, TokenTransactionType } from '@prisma/client';
+import { OrganisationStatus, TokenTransactionType, UserRole } from '@prisma/client';
+import { ALL_ORG_PERMISSIONS } from '../../org/common/org-permissions';
 
 @Injectable()
 export class PlatformOrganisationService {
@@ -153,6 +156,23 @@ export class PlatformOrganisationService {
       },
     });
 
+    // Fetch Super Admin for organisation access oversight
+    const superAdminUser = await this.prisma.user.findFirst({
+      where: {
+        organisationId: id,
+        role: UserRole.ORGANISATION_SUPER_ADMIN,
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+
     return {
       id: org.id,
       name: org.name,
@@ -175,15 +195,133 @@ export class PlatformOrganisationService {
       allocatedTokens: org.tokenBalance?.allocatedTokens || 0,
       consumedTokens: org.tokenBalance?.consumedTokens || 0,
       allocationLimit: org.allocationLimit,
+      superAdmin: superAdminUser
+        ? {
+            id: superAdminUser.id,
+            name: `${superAdminUser.firstName} ${superAdminUser.lastName}`.trim(),
+            email: superAdminUser.email,
+            role: superAdminUser.role,
+            isActive: superAdminUser.isActive,
+            status: superAdminUser.isActive ? 'ACTIVE' : 'INACTIVE',
+            createdAt: superAdminUser.createdAt,
+          }
+        : null,
       recentActivity,
     };
   }
 
   /**
-   * Creates a new organisation at platform level with initial ledger balances.
+   * Resets the password for the Organisation Super Admin of the specified organisation.
+   * Generates a new secure temporary password, hashes it, replaces the existing password hash,
+   * revokes existing sessions, records an audit log (without credentials), and returns the temporary password once.
+   */
+  async resetSuperAdminPassword(
+    organisationId: string,
+    actor: AuthenticatedUser,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    const org = await this.prisma.organisation.findUnique({
+      where: { id: organisationId },
+    });
+    if (!org) {
+      throw new NotFoundException(`Organisation with ID ${organisationId} not found`);
+    }
+
+    // Scoped strictly to the target organisation and ORGANISATION_SUPER_ADMIN role
+    const superAdmins = await this.prisma.user.findMany({
+      where: {
+        organisationId,
+        role: UserRole.ORGANISATION_SUPER_ADMIN,
+      },
+    });
+
+    if (superAdmins.length === 0) {
+      throw new NotFoundException(
+        `No Organisation Super Admin found for organisation '${org.name}'`,
+      );
+    }
+
+    if (superAdmins.length > 1) {
+      throw new ConflictException(
+        `Multiple Organisation Super Admins found for organisation '${org.name}'. Please contact system administrator.`,
+      );
+    }
+
+    const superAdmin = superAdmins[0];
+
+    // Generate new secure temporary password
+    const temporaryPassword = this.generateTemporaryPassword();
+    const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+
+    // Update the password hash in the database and enforce password change on next login
+    await this.prisma.user.update({
+      where: { id: superAdmin.id },
+      data: { passwordHash, mustChangePassword: true },
+    });
+
+    // Revoke any existing active sessions so previous logins are invalidated
+    await this.prisma.platformSession.updateMany({
+      where: { userId: superAdmin.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    // Record immutable audit log - NEVER log the password or hash
+    await this.auditService.record({
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: 'ORGANISATION_SUPER_ADMIN_PASSWORD_RESET',
+      entityType: 'USER',
+      entityId: superAdmin.id,
+      organisationId,
+      metadata: {
+        organisationName: org.name,
+        superAdminId: superAdmin.id,
+        superAdminEmail: superAdmin.email,
+        targetRole: superAdmin.role,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return {
+      superAdmin: {
+        id: superAdmin.id,
+        name: `${superAdmin.firstName} ${superAdmin.lastName}`.trim(),
+        email: superAdmin.email,
+        role: superAdmin.role,
+      },
+      temporaryPassword,
+    };
+  }
+
+  /**
+   * Generates a cryptographically secure temporary password.
+   * Format: 3 uppercase + 3 lowercase + 3 digits + 3 symbols = 12 chars min.
+   */
+  private generateTemporaryPassword(): string {
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lower = 'abcdefghjkmnpqrstuvwxyz';
+    const digits = '23456789';
+    const symbols = '!@#$%&';
+    const pick = (pool: string, n: number) =>
+      Array.from({ length: n }, () => pool[crypto.randomInt(pool.length)]).join('');
+    const raw = pick(upper, 3) + pick(lower, 3) + pick(digits, 3) + pick(symbols, 3);
+    // Fisher-Yates shuffle
+    const arr = raw.split('');
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = crypto.randomInt(i + 1);
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr.join('');
+  }
+
+  /**
+   * Creates a new organisation at platform level with initial ledger balances
+   * and the initial Organisation Super Admin account in a single transaction.
    */
   async create(dto: CreateOrganisationDto, actor: AuthenticatedUser, ipAddress?: string, userAgent?: string) {
-    // Check slug and domain uniqueness
+    // ── pre-flight uniqueness checks ────────────────────────────
     const existingSlug = await this.prisma.organisation.findUnique({
       where: { slug: dto.slug },
     });
@@ -200,9 +338,34 @@ export class PlatformOrganisationService {
       }
     }
 
+    // Check super admin email uniqueness BEFORE opening the transaction
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: dto.superAdminEmail.toLowerCase().trim() },
+    });
+    if (existingUser) {
+      throw new ConflictException(
+        `A user with email '${dto.superAdminEmail}' already exists. Use a different email for the Organisation Super Admin.`,
+      );
+    }
+
+    // Validate manual initial password matches confirmation
+    if (dto.superAdminPassword !== dto.superAdminPasswordConfirmation) {
+      throw new BadRequestException('Initial password and confirmation password do not match');
+    }
+
     const initialTokens = dto.initialTokenAllocation || 0;
 
-    const created = await this.prisma.$transaction(async (tx) => {
+    // Hash the manually entered initial password BEFORE the transaction
+    const passwordHash = await bcrypt.hash(dto.superAdminPassword, 12);
+
+    // Parse superAdminName into first/last (split on first space)
+    const nameParts = dto.superAdminName.trim().split(/\s+/);
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ') || '-';
+    const superAdminEmail = dto.superAdminEmail.toLowerCase().trim();
+
+    // ── atomic transaction ──────────────────────────────────────
+    const { org, superAdmin } = await this.prisma.$transaction(async (tx) => {
       const org = await tx.organisation.create({
         data: {
           name: dto.name,
@@ -257,23 +420,72 @@ export class PlatformOrganisationService {
         });
       }
 
-      return org;
+      // Create the initial Organisation Super Admin user with mustChangePassword: true
+      const superAdmin = await tx.user.create({
+        data: {
+          email: superAdminEmail,
+          passwordHash,
+          firstName,
+          lastName,
+          role: UserRole.ORGANISATION_SUPER_ADMIN,
+          organisationId: org.id,
+          isActive: true,
+          isEmailVerified: true,
+          mustChangePassword: true,
+          orgMemberProfile: {
+            create: {
+              organisationId: org.id,
+              // Full permission set — ORGANISATION_SUPER_ADMIN ceiling
+              permissions: [...ALL_ORG_PERMISSIONS],
+              invitedById: actor.userId,
+            },
+          },
+        },
+      });
+
+      return { org, superAdmin };
     });
 
-    // Record Central Audit Log
+    // ── audit log (NO password data) ────────────────────────────
     await this.auditService.record({
       actorId: actor.userId,
       actorRole: actor.role,
       action: 'ORGANISATION_CREATED',
       entityType: 'ORGANISATION',
-      entityId: created.id,
-      organisationId: created.id,
-      metadata: { name: created.name, slug: created.slug, initialTokens },
+      entityId: org.id,
+      organisationId: org.id,
+      metadata: {
+        name: org.name,
+        slug: org.slug,
+        initialTokens,
+        superAdminId: superAdmin.id,
+        superAdminEmail,
+        // ⚠️  Never log the password or hash
+      },
       ipAddress,
       userAgent,
     });
 
-    return created;
+    // ── response (NO password returned) ─────────────────────────
+    return {
+      organisation: {
+        id: org.id,
+        name: org.name,
+        slug: org.slug,
+        domain: org.domain,
+        contactEmail: org.contactEmail,
+        status: org.status,
+        tier: org.tier,
+        tokenBalance: org.tokenBalance?.balance ?? 0,
+        createdAt: org.createdAt,
+      },
+      superAdmin: {
+        id: superAdmin.id,
+        name: `${superAdmin.firstName} ${superAdmin.lastName}`.trim(),
+        email: superAdmin.email,
+        role: superAdmin.role,
+      },
+    };
   }
 
   /**

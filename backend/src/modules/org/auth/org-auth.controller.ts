@@ -7,8 +7,8 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Req, UseGuard
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
-import { Org, OrgContext, OrgGuard } from '../common/org-context';
-import { AcceptInvitationDto, OrgLoginDto } from '../team/dto';
+import { AllowPasswordChange, Org, OrgContext, OrgGuard } from '../common/org-context';
+import { AcceptInvitationDto, ChangePasswordDto, OrgLoginDto } from '../team/dto';
 import { OrgAuthService } from './org-auth.service';
 
 const ua = (req: Request) => (typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined);
@@ -28,6 +28,7 @@ export class OrgAuthController {
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, OrgGuard)
+  @AllowPasswordChange()
   logout(@Org() ctx: OrgContext) {
     return this.auth.logout(ctx);
   }
@@ -35,8 +36,18 @@ export class OrgAuthController {
   @Get('me')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, OrgGuard)
+  @AllowPasswordChange()
   me(@Org() ctx: OrgContext) {
     return this.auth.me(ctx);
+  }
+
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, OrgGuard)
+  @AllowPasswordChange()
+  changePassword(@Org() ctx: OrgContext, @Body() dto: ChangePasswordDto) {
+    return this.auth.changePassword(ctx, dto);
   }
 }
 

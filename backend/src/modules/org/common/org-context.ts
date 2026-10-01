@@ -31,14 +31,19 @@ export interface OrgContext {
   email: string;
   firstName: string;
   lastName: string;
+  mustChangePassword?: boolean;
   ip?: string;
   userAgent?: string;
 }
 
 export const ORG_PERMS_KEY = 'org_permissions_any';
+export const ALLOW_PASSWORD_CHANGE_KEY = 'allow_password_change_route';
 
 /** Route requires ANY of the listed permissions (use several keys for read.all / read.assigned pairs). */
 export const OrgPerms = (...permissions: OrgPermission[]) => SetMetadata(ORG_PERMS_KEY, permissions);
+
+/** Allows users who must change password to access specific endpoints (e.g. /org/auth/me, /org/auth/change-password, /org/auth/logout). */
+export const AllowPasswordChange = () => SetMetadata(ALLOW_PASSWORD_CHANGE_KEY, true);
 
 export const Org = createParamDecorator((_data: unknown, ctx: ExecutionContext): OrgContext => {
   return ctx.switchToHttp().getRequest().orgContext as OrgContext;
@@ -62,7 +67,10 @@ export async function resolveOrgContext(
   user: { userId: string; role: UserRole; organisationId?: string | null; email: string; firstName: string; lastName: string; sessionId?: string },
 ): Promise<OrgContext> {
   if (!isOrgRole(user.role)) throw new ForbiddenException('This area is for organisation members only');
-  const profile = await prisma.orgMemberProfile.findUnique({ where: { userId: user.userId } });
+  const [profile, dbUser] = await Promise.all([
+    prisma.orgMemberProfile.findUnique({ where: { userId: user.userId } }),
+    prisma.user.findUnique({ where: { id: user.userId }, select: { mustChangePassword: true } }),
+  ]);
   if (!profile || profile.status !== 'ACTIVE' || !user.organisationId || profile.organisationId !== user.organisationId) {
     throw new ForbiddenException('Your organisation membership is not active');
   }
@@ -83,6 +91,7 @@ export async function resolveOrgContext(
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
+    mustChangePassword: dbUser?.mustChangePassword ?? false,
   };
 }
 
@@ -103,6 +112,16 @@ export class OrgGuard implements CanActivate {
     const ua = req.headers['user-agent'];
     orgContext.userAgent = typeof ua === 'string' ? ua : undefined;
     req.orgContext = orgContext;
+
+    // Password change requirement enforcement:
+    // When mustChangePassword is true, only routes marked with @AllowPasswordChange() may be accessed.
+    const allowPasswordChange = this.reflector.getAllAndOverride<boolean>(ALLOW_PASSWORD_CHANGE_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (orgContext.mustChangePassword && !allowPasswordChange) {
+      throw new ForbiddenException('Password change required before accessing organisation workspace');
+    }
 
     const required = this.reflector.getAllAndOverride<OrgPermission[]>(ORG_PERMS_KEY, [
       context.getHandler(),

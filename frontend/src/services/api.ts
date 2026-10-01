@@ -12,9 +12,14 @@ export const apiClient: AxiosInstance = axios.create({
   timeout: 10000,
 });
 
-// Attach real JWT from localStorage — no dev fallback
+// Attach isolated JWT from localStorage based on portal context
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('clyptus_token');
+  const url = config.url || '';
+  const isOrgRequest = url.startsWith('/org') || url.startsWith('org');
+  const token = isOrgRequest
+    ? localStorage.getItem('clyptus_org_token')
+    : localStorage.getItem('clyptus_platform_token');
+
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }

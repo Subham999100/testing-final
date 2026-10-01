@@ -16,6 +16,7 @@ model User {
   role                 UserRole              @default(CANDIDATE)
   isActive             Boolean               @default(true)
   isEmailVerified      Boolean               @default(false)
+  mustChangePassword   Boolean               @default(false)
   organisationId       String?
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt

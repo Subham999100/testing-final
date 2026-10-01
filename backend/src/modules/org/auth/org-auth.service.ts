@@ -25,7 +25,7 @@ import { OrgContext } from '../common/org-context';
 import { OrgEventsService } from '../common/org-events.service';
 import { ROLE_CEILINGS, isOrgRole } from '../common/org-permissions';
 import { OrgTokenService } from '../common/org-token.service';
-import { AcceptInvitationDto, OrgLoginDto } from '../team/dto';
+import { AcceptInvitationDto, ChangePasswordDto, OrgLoginDto } from '../team/dto';
 
 const DUMMY_HASH = bcrypt.hashSync('timing-equaliser-not-a-password', 10);
 
@@ -132,7 +132,7 @@ export class OrgAuthService {
       ipAddress: ip,
       userAgent,
     });
-    return { accessToken, expiresAt: expiresAt.toISOString() };
+    return { accessToken, expiresAt: expiresAt.toISOString(), requiresPasswordChange: !!user.mustChangePassword };
   }
 
   async logout(ctx: OrgContext) {
@@ -144,6 +144,49 @@ export class OrgAuthService {
       await this.events.audit(ctx, 'ORG_LOGOUT', 'PLATFORM_SESSION', ctx.sessionId);
     }
     return { loggedOut: true };
+  }
+
+  async changePassword(ctx: OrgContext, dto: ChangePasswordDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: ctx.userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const isCurrentValid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+    if (!isCurrentValid) {
+      throw new BadRequestException('Current password is incorrect');
+    }
+
+    if (dto.currentPassword === dto.newPassword) {
+      throw new BadRequestException('New password must be different from current password');
+    }
+
+    if (dto.confirmPassword && dto.newPassword !== dto.confirmPassword) {
+      throw new BadRequestException('New password and confirmation do not match');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 12);
+
+    await this.prisma.user.update({
+      where: { id: ctx.userId },
+      data: {
+        passwordHash,
+        mustChangePassword: false,
+      },
+    });
+
+    await this.auditService.record({
+      actorId: ctx.userId,
+      actorRole: ctx.role,
+      action: 'PASSWORD_CHANGED',
+      entityType: 'USER',
+      entityId: ctx.userId,
+      organisationId: ctx.organisationId,
+      ipAddress: ctx.ip,
+      userAgent: ctx.userAgent,
+    });
+
+    return { success: true, message: 'Password changed successfully' };
   }
 
   async me(ctx: OrgContext) {
@@ -165,6 +208,7 @@ export class OrgAuthService {
         role: ctx.role,
         title: profile?.title ?? null,
         timezone: profile?.timezone ?? 'UTC',
+        mustChangePassword: !!ctx.mustChangePassword,
       },
       organisation: {
         id: org.id,
