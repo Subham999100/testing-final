@@ -24,6 +24,7 @@ import {
   ORG_PERMISSION_CATALOG,
   ROLE_CEILINGS,
   ROLE_DEFAULTS,
+  OrgRole,
   canManageRole,
   effectivePermissions,
   grantableFor,
@@ -206,6 +207,65 @@ export class TeamService {
     return this.getMember(ctx, userId);
   }
 
+  async updateMemberRole(ctx: OrgContext, userId: string, newRole: OrgRole) {
+    if (userId === ctx.userId) {
+      throw new BadRequestException('You cannot modify your own role');
+    }
+    const p = await this.getProfile(ctx, userId);
+    if (p.user.role === UserRole.ORGANISATION_SUPER_ADMIN) {
+      throw new ForbiddenException('Organisation Super Admins cannot be modified from the organisation portal');
+    }
+    if (newRole === UserRole.ORGANISATION_SUPER_ADMIN) {
+      throw new ForbiddenException('Cannot assign Organisation Super Admin role');
+    }
+    if (!canManageRole(ctx.role, ctx.permissions, p.user.role)) {
+      throw new ForbiddenException(`You do not have permission to manage members with role ${p.user.role}`);
+    }
+    if (!canManageRole(ctx.role, ctx.permissions, newRole)) {
+      throw new ForbiddenException(`You do not have permission to assign role ${newRole}`);
+    }
+    if (p.user.role === newRole) {
+      return this.getMember(ctx, userId);
+    }
+    if (newRole === UserRole.RECRUITER) {
+      await this.assertRecruiterSeat(ctx.organisationId, 0);
+    }
+
+    let newPermissions: string[];
+    if (newRole === UserRole.ORGANISATION_ADMIN) {
+      newPermissions = [...ROLE_DEFAULTS.ORGANISATION_ADMIN];
+    } else {
+      newPermissions = p.permissions.filter((k) => (ROLE_CEILINGS.RECRUITER as string[]).includes(k));
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { role: newRole as UserRole },
+      });
+      await tx.orgMemberProfile.update({
+        where: { userId },
+        data: { permissions: newPermissions },
+      });
+      await tx.platformSession.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    });
+
+    this.events.disconnectUser(userId);
+    await this.events.audit(ctx, 'MEMBER_ROLE_UPDATED', 'ORG_MEMBER', userId, {
+      email: p.user.email,
+      previousRole: p.user.role,
+      newRole,
+      permissions: newPermissions,
+    });
+    this.events.emit(ctx.organisationId, 'member.updated', { userId });
+    this.events.emitToUser(userId, 'me.updated', {});
+
+    return this.getMember(ctx, userId);
+  }
+
   private assertManageable(ctx: OrgContext, userId: string, role: UserRole) {
     if (userId === ctx.userId) throw new BadRequestException('You cannot change your own membership status');
     if (role === UserRole.ORGANISATION_SUPER_ADMIN) {
@@ -336,6 +396,12 @@ export class TeamService {
   async createInvitation(ctx: OrgContext, dto: CreateInvitationDto) {
     assertCan(ctx, 'invitations.manage');
     const role = dto.role as UserRole;
+    if (role === UserRole.ORGANISATION_SUPER_ADMIN) {
+      throw new ForbiddenException('Organisation Super Admins can only be provisioned by the platform team');
+    }
+    if (role === UserRole.ORGANISATION_ADMIN && ctx.role !== UserRole.ORGANISATION_SUPER_ADMIN) {
+      throw new ForbiddenException('Only Organisation Super Admin can invite Organisation Admins');
+    }
     if (!canManageRole(ctx.role, ctx.permissions, role)) throw new ForbiddenException('You cannot invite members with this role');
     const permissions = dto.permissions
       ? [...new Set(dto.permissions)]

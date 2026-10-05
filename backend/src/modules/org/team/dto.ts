@@ -113,6 +113,11 @@ export class UpdatePermissionsDto {
   permissions: string[];
 }
 
+export class UpdateMemberRoleDto {
+  @IsIn(['ORGANISATION_ADMIN', 'RECRUITER'])
+  role: 'ORGANISATION_ADMIN' | 'RECRUITER';
+}
+
 export class AllocateTokensDto {
   @IsString()
   @IsNotEmpty()

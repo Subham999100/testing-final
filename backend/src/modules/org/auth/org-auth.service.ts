@@ -105,7 +105,7 @@ export class OrgAuthService {
     }
 
     const org = await this.prisma.organisation.findUnique({ where: { id: user.organisationId } });
-    if (!org || org.status === OrganisationStatus.SUSPENDED || org.status === OrganisationStatus.ARCHIVED) {
+    if (!org || org.status !== OrganisationStatus.ACTIVE) {
       throw new UnauthorizedException('Your organisation is not active. Contact platform support.');
     }
 
@@ -247,7 +247,7 @@ export class OrgAuthService {
   async acceptInvitation(dto: AcceptInvitationDto, ip?: string, userAgent?: string) {
     const invitation = await this.findPendingInvitation(dto.token);
     const org = await this.prisma.organisation.findUnique({ where: { id: invitation.organisationId } });
-    if (!org || org.status === OrganisationStatus.SUSPENDED || org.status === OrganisationStatus.ARCHIVED) {
+    if (!org || org.status !== OrganisationStatus.ACTIVE) {
       throw new BadRequestException('This organisation is not active');
     }
     const existing = await this.prisma.user.findUnique({ where: { email: invitation.email } });

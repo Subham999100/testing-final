@@ -21,6 +21,16 @@ export const PlatformService = {
     return response.meta ? response : (response.data ?? response);
   },
   async write(path: string, body: unknown = {}, method: 'post' | 'patch' = 'post'): Promise<any> {
+    if (path === 'organisations' && method === 'post') {
+      const p = body as any;
+      const sanitized = {
+        ...p,
+        ...(p?.superAdminPassword ? { superAdminPassword: '[REDACTED]' } : {}),
+        ...(p?.superAdminPasswordConfirmation ? { superAdminPasswordConfirmation: '[REDACTED]' } : {}),
+      };
+      console.log('[PlatformService.write] Path:', path, 'Payload keys:', Object.keys(p || {}));
+      console.log('[PlatformService.write] Sanitized payload:', sanitized);
+    }
     const response: any = await apiClient[method](`/platform/${path}`, body);
     return response.data ?? response;
   },
@@ -65,6 +75,16 @@ export const PlatformService = {
 
   async createOrganisation(payload: any): Promise<Organisation> {
     try {
+      const sanitized = {
+        ...payload,
+        ...(payload?.superAdminPassword ? { superAdminPassword: '[REDACTED]' } : {}),
+        ...(payload?.superAdminPasswordConfirmation
+          ? { superAdminPasswordConfirmation: '[REDACTED]' }
+          : {}),
+      };
+      console.log('[PlatformService.createOrganisation] Payload keys:', Object.keys(payload || {}));
+      console.log('[PlatformService.createOrganisation] Sanitized payload:', sanitized);
+
       const res: any = await apiClient.post('/platform/organisations', payload);
       return res.data || res;
     } catch (failure) {

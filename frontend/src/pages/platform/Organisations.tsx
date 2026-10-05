@@ -1,7 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Page, Table, Action, columns, reason } from '../../components/platform/OperationsUI';
+import { useQueryClient } from '@tanstack/react-query';
+import { Page, Table, Action, columns, reason, buttonClass } from '../../components/platform/OperationsUI';
 import { usePermissions } from '../../hooks/usePermissions';
+import {
+  CreateOrganisationModal,
+  CreateOrganisationFormData,
+} from '../../features/platform/organisations/CreateOrganisationModal';
+import { PlatformService } from '../../services/platform.service';
+
 export const organisationStatuses = [
   'ACTIVE',
   'PENDING_VERIFICATION',
@@ -10,29 +17,45 @@ export const organisationStatuses = [
   'SUSPENDED',
   'ARCHIVED',
 ];
+
 export function Organisations() {
   const { hasPermission: can } = usePermissions();
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const queryClient = useQueryClient();
+
+  const handleCreateOrganisation = async (formData: CreateOrganisationFormData) => {
+    setIsSubmitting(true);
+    try {
+      await PlatformService.createOrganisation(formData);
+      setCreateModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['platform'] });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <Page title="Organizations" description="Manage organizations and their onboarding lifecycle.">
-      <div>
+      <div className="flex items-center justify-between">
         {can('platform.organisations.create') && (
-          <Action
-            title="Create organization"
-            path="organisations"
-            fields={[
-              { name: 'name' },
-              { name: 'slug' },
-              { name: 'contactEmail', type: 'email' },
-              { name: 'domain', required: false },
-              { name: 'industry', required: false },
-              { name: 'tier', options: ['STANDARD', 'GROWTH', 'ENTERPRISE'] },
-              ...(can('platform.tokens.allocate')
-                ? [{ name: 'initialTokenAllocation', type: 'number', min: 0, value: 0 }]
-                : []),
-            ]}
-          />
+          <button
+            type="button"
+            className={buttonClass}
+            onClick={() => setCreateModalOpen(true)}
+          >
+            Create organization
+          </button>
         )}
       </div>
+
+      {createModalOpen && (
+        <CreateOrganisationModal
+          isSubmitting={isSubmitting}
+          onClose={() => setCreateModalOpen(false)}
+          onSubmit={handleCreateOrganisation}
+        />
+      )}
       <Table
         path="organisations"
         filters={{ status: organisationStatuses, tier: ['STANDARD', 'GROWTH', 'ENTERPRISE'] }}
