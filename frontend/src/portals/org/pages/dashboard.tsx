@@ -82,10 +82,10 @@ export function DashboardPage() {
                 </Button>
               </Link>
             )}
-            {can('invitations.manage') && (
-              <Link to="/org/invitations?new=1">
+            {can('members.read') && (
+              <Link to="/org/members">
                 <Button variant="secondary" icon={UserPlus}>
-                  Invite
+                  Team
                 </Button>
               </Link>
             )}

@@ -1,49 +1,97 @@
-import React from 'react';
-import { Page } from '../../components/platform/OperationsUI';
+// ============================================================
+// Platform Super Admin — Users (Organisation Super Admins)
+// Lists organisation super administrators and enables transferring
+// credentials while preserving the underlying user, organisation,
+// and all tenant-owned data.
+// ============================================================
 
-// ============================================================
-// Users page
-//
-// The frontend calls GET /platform/users — this route
-// does NOT exist in the backend. There is no platform-level
-// user management endpoint. User accounts belong to
-// organisations; platform admins are managed via /platform/admins.
-// ============================================================
+import React, { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Page, Table } from '../../components/platform/OperationsUI';
+import { TransferSuperAdminModal } from '../../features/platform/users/TransferSuperAdminModal';
+import { PlatformService } from '../../services/platform.service';
 
 export function Users() {
+  const [selectedOrg, setSelectedOrg] = useState<any | null>(null);
+  const queryClient = useQueryClient();
+
+  const handleTransfer = async (
+    orgId: string,
+    payload: { newEmail: string; newPassword: string; confirmPassword: string },
+  ) => {
+    return PlatformService.transferSuperAdmin(orgId, payload);
+  };
+
+  const handleSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ['platform'] });
+  };
+
   return (
     <Page
-      title="User administration"
-      description="Platform-level user administration is not yet available."
+      title="Organisation Super Admins"
+      description="Manage and transfer login credentials for Organisation Super Administrators across all organisations."
     >
-      <div className="p-6 border border-warning bg-warning-soft rounded-xl text-sm space-y-3">
-        <p className="font-semibold text-ink">
-          User administration endpoint not yet available.
-        </p>
-        <p className="text-muted">
-          The backend does not expose a{' '}
-          <code className="font-mono text-xs bg-soft px-1 py-0.5 rounded">
-            /platform/users
-          </code>{' '}
-          route. Platform administrator accounts are managed on the{' '}
-          <strong>Platform Admins</strong> page. Organisation member accounts can be
-          reviewed per-organisation via the <strong>Organisations</strong> detail view.
-        </p>
-        <div className="flex gap-3">
-          <a
-            href="/platform/admins"
-            className="inline-block px-4 py-2 bg-action text-on-action rounded-lg text-xs font-semibold"
+      <Table
+        path="organisations"
+        columns={[
+          {
+            key: 'name',
+            title: 'Organisation',
+            render: (r: any) => (
+              <span className="font-semibold text-slate-900">{r.name}</span>
+            ),
+          },
+          {
+            key: 'superAdminEmail',
+            title: 'Super Admin Email',
+            render: (r: any) => (
+              <span className="font-mono text-xs text-slate-700">
+                {r.superAdmin?.email || 'No Super Admin'}
+              </span>
+            ),
+          },
+          {
+            key: 'status',
+            title: 'Status',
+            render: (r: any) => {
+              const active = r.superAdmin ? r.superAdmin.isActive : r.status === 'ACTIVE';
+              return (
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                    active
+                      ? 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20'
+                      : 'bg-slate-100 text-slate-700'
+                  }`}
+                >
+                  {active ? 'Active' : 'Inactive'}
+                </span>
+              );
+            },
+          },
+        ]}
+        actions={(r: any) => (
+          <button
+            type="button"
+            className="button button-secondary button-small"
+            onClick={() => setSelectedOrg(r)}
+            disabled={!r.superAdmin}
+            title={!r.superAdmin ? 'No Organisation Super Admin configured' : undefined}
           >
-            Platform Admins
-          </a>
-          <a
-            href="/platform/organisations"
-            className="inline-block px-4 py-2 border border-line text-ink rounded-lg text-xs font-semibold"
-          >
-            Organisations
-          </a>
-        </div>
-      </div>
+            Transfer
+          </button>
+        )}
+      />
+
+      {selectedOrg && (
+        <TransferSuperAdminModal
+          organisation={selectedOrg}
+          onClose={() => setSelectedOrg(null)}
+          onSuccess={handleSuccess}
+          onSubmitTransfer={handleTransfer}
+        />
+      )}
     </Page>
   );
 }
+
+export default Users;

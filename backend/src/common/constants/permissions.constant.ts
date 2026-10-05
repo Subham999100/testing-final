@@ -36,6 +36,13 @@ export const PlatformPermissions = {
   // Platform Settings & Configuration
   SETTINGS_READ: 'platform.settings.read',
   SETTINGS_MANAGE: 'platform.settings.manage',
+
+  // Platform Support Case Management
+  SUPPORT_READ: 'platform.support.read',
+  SUPPORT_MANAGE: 'platform.support.manage',
+
+  // Platform Reports & Analytics
+  REPORTS_READ: 'platform.reports.read',
 } as const;
 
 export type PlatformPermissionKey = (typeof PlatformPermissions)[keyof typeof PlatformPermissions];

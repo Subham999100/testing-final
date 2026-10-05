@@ -32,6 +32,7 @@ export class TransformInterceptor<T>
         if (res && typeof res === 'object' && 'data' in res && 'meta' in res) {
           return {
             success: true,
+            ...res,
             data: res.data,
             meta: res.meta,
             message: res.message || 'Operation successful',

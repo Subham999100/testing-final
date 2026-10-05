@@ -65,6 +65,9 @@ export const ORG_PERMISSION_CATALOG = [
   { key: 'notifications.announce', group: 'Other', label: 'Send announcements' },
   { key: 'exports.run', group: 'Other', label: 'Run data exports' },
   { key: 'tasks.use', group: 'Other', label: 'Use tasks' },
+  { key: 'support.read', group: 'Support', label: 'View support tickets' },
+  { key: 'support.create', group: 'Support', label: 'Create support tickets' },
+  { key: 'support.reply', group: 'Support', label: 'Reply to support tickets' },
 ] as const;
 
 export type OrgPermission = (typeof ORG_PERMISSION_CATALOG)[number]['key'];

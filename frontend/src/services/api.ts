@@ -22,7 +22,7 @@ apiClient.interceptors.request.use((config) => {
   const url = config.url || '';
   const isOrgRequest = url.startsWith('/org') || url.startsWith('org');
   const token = isOrgRequest
-    ? localStorage.getItem('clyptus_org_token')
+    ? sessionStorage.getItem('clyptus_org_token')
     : getPlatformAccessToken();
 
   if (token && config.headers) {

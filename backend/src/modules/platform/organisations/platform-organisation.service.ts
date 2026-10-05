@@ -27,6 +27,7 @@ import { CreateOrganisationDto } from './dto/create-organisation.dto';
 import { UpdateOrganisationDto } from './dto/update-organisation.dto';
 import { SuspendOrganisationDto } from './dto/suspend-organisation.dto';
 import { QueryOrganisationDto } from './dto/query-organisation.dto';
+import { TransferSuperAdminDto } from './dto/transfer-super-admin.dto';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { OrganisationStatus, TokenTransactionType, UserRole } from '@prisma/client';
 import { ALL_ORG_PERMISSIONS } from '../../org/common/org-permissions';
@@ -88,28 +89,94 @@ export class PlatformOrganisationService {
       }),
     ]);
 
-    const transformedItems = items.map((org) => ({
-      id: org.id,
-      name: org.name,
-      slug: org.slug,
-      domain: org.domain,
-      contactEmail: org.contactEmail,
-      contactPhone: org.contactPhone,
-      status: org.status,
-      suspensionReason: org.suspensionReason,
-      suspendedAt: org.suspendedAt,
-      tier: org.tier,
-      maxRecruiters: org.maxRecruiters,
-      createdAt: org.createdAt,
-      updatedAt: org.updatedAt,
-      membersCount: org._count.users,
-      tokenBalance: org.tokenBalance?.balance || 0,
-      allocatedTokens: org.tokenBalance?.allocatedTokens || 0,
-      consumedTokens: org.tokenBalance?.consumedTokens || 0,
-      industry: org.metadata?.industry || null,
-      companySize: org.metadata?.companySize || null,
-      website: org.metadata?.website || null,
-    }));
+    const orgIds = items.map((org) => org.id);
+    const [recruiterCounts, superAdminUsers] = await Promise.all([
+      orgIds.length > 0
+        ? this.prisma.user.groupBy({
+            by: ['organisationId'],
+            where: {
+              organisationId: { in: orgIds },
+              role: UserRole.RECRUITER,
+              isActive: true,
+            },
+            _count: { id: true },
+          })
+        : [],
+      orgIds.length > 0
+        ? this.prisma.user.findMany({
+            where: {
+              organisationId: { in: orgIds },
+              role: UserRole.ORGANISATION_SUPER_ADMIN,
+            },
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              role: true,
+              isActive: true,
+              createdAt: true,
+              organisationId: true,
+            },
+          })
+        : [],
+    ]);
+
+    const recruiterCountMap = new Map(
+      recruiterCounts
+        .filter((rc) => rc.organisationId !== null)
+        .map((rc) => [rc.organisationId as string, rc._count.id]),
+    );
+
+    const superAdminMap = new Map(
+      superAdminUsers
+        .filter((u) => u.organisationId !== null)
+        .map((u) => [
+          u.organisationId as string,
+          {
+            id: u.id,
+            email: u.email,
+            name: `${u.firstName} ${u.lastName}`.trim(),
+            role: u.role,
+            isActive: u.isActive,
+            status: u.isActive ? 'ACTIVE' : 'INACTIVE',
+            createdAt: u.createdAt,
+          },
+        ]),
+    );
+
+    const transformedItems = items.map((org) => {
+      const limit = org.recruiterLimit ?? 25;
+      const recruitersUsed = recruiterCountMap.get(org.id) || 0;
+      const recruitersAvailable = Math.max(0, limit - recruitersUsed);
+
+      return {
+        id: org.id,
+        name: org.name,
+        slug: org.slug,
+        domain: org.domain,
+        contactEmail: org.contactEmail,
+        contactPhone: org.contactPhone,
+        status: org.status,
+        suspensionReason: org.suspensionReason,
+        suspendedAt: org.suspendedAt,
+        tier: org.tier,
+        recruiterLimit: limit,
+        maxRecruiters: limit,
+        recruitersUsed,
+        recruitersAvailable,
+        superAdmin: superAdminMap.get(org.id) || null,
+        createdAt: org.createdAt,
+        updatedAt: org.updatedAt,
+        membersCount: org._count.users,
+        tokenBalance: org.tokenBalance?.balance || 0,
+        allocatedTokens: org.tokenBalance?.allocatedTokens || 0,
+        consumedTokens: org.tokenBalance?.consumedTokens || 0,
+        industry: org.metadata?.industry || null,
+        companySize: org.metadata?.companySize || null,
+        website: org.metadata?.website || null,
+      };
+    });
 
     return {
       data: transformedItems,
@@ -173,6 +240,16 @@ export class PlatformOrganisationService {
       },
     });
 
+    const recruitersUsed = await this.prisma.user.count({
+      where: {
+        organisationId: id,
+        role: UserRole.RECRUITER,
+        isActive: true,
+      },
+    });
+    const recruiterLimit = org.recruiterLimit ?? 25;
+    const recruitersAvailable = Math.max(0, recruiterLimit - recruitersUsed);
+
     return {
       id: org.id,
       name: org.name,
@@ -184,7 +261,10 @@ export class PlatformOrganisationService {
       suspensionReason: org.suspensionReason,
       suspendedAt: org.suspendedAt,
       tier: org.tier,
-      maxRecruiters: org.maxRecruiters,
+      recruiterLimit,
+      maxRecruiters: recruiterLimit,
+      recruitersUsed,
+      recruitersAvailable,
       createdAt: org.createdAt,
       updatedAt: org.updatedAt,
       membersCount: org._count.users,
@@ -296,6 +376,113 @@ export class PlatformOrganisationService {
   }
 
   /**
+   * Transfers Organisation Super Admin credentials for the specified organisation.
+   * Changes the login credentials (email and password) of the EXISTING Organisation Super Admin user
+   * while keeping the exact same user ID, organisation, role, and all organisation-owned data.
+   * Invalidates old sessions, sets mustChangePassword = true, records audit log, and returns safe data.
+   */
+  async transferSuperAdminCredentials(
+    organisationId: string,
+    dto: TransferSuperAdminDto,
+    actor: AuthenticatedUser,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    if (dto.newPassword !== dto.confirmPassword) {
+      throw new BadRequestException('Passwords do not match');
+    }
+
+    const org = await this.prisma.organisation.findUnique({
+      where: { id: organisationId },
+    });
+    if (!org) {
+      throw new NotFoundException(`Organisation with ID ${organisationId} not found`);
+    }
+
+    // Locate the existing Organisation Super Admin
+    const superAdmins = await this.prisma.user.findMany({
+      where: {
+        organisationId,
+        role: UserRole.ORGANISATION_SUPER_ADMIN,
+      },
+    });
+
+    if (superAdmins.length === 0) {
+      throw new NotFoundException(
+        `No Organisation Super Admin found for organisation '${org.name}'`,
+      );
+    }
+
+    if (superAdmins.length > 1) {
+      throw new ConflictException(
+        `Multiple Organisation Super Admins found for organisation '${org.name}'. Please contact system administrator.`,
+      );
+    }
+
+    const superAdmin = superAdmins[0];
+    const normalizedNewEmail = dto.newEmail.trim().toLowerCase();
+
+    // Verify new email uniqueness against other users
+    const existingWithEmail = await this.prisma.user.findUnique({
+      where: { email: normalizedNewEmail },
+    });
+    if (existingWithEmail && existingWithEmail.id !== superAdmin.id) {
+      throw new ConflictException(`Email '${dto.newEmail}' is already registered to another user`);
+    }
+
+    // Hash the new password securely using bcrypt
+    const passwordHash = await bcrypt.hash(dto.newPassword, 12);
+
+    // Update existing user credentials and revoke sessions in transaction
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: superAdmin.id },
+        data: {
+          email: normalizedNewEmail,
+          passwordHash,
+          mustChangePassword: true,
+        },
+      });
+
+      // Revoke any existing active sessions for this user so old session token is invalidated
+      await tx.platformSession.updateMany({
+        where: { userId: superAdmin.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    });
+
+    // Record immutable audit log - NEVER log the password or hash
+    await this.auditService.record({
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: 'ORGANISATION_SUPER_ADMIN_CREDENTIALS_TRANSFERRED',
+      entityType: 'USER',
+      entityId: superAdmin.id,
+      organisationId,
+      metadata: {
+        organisationName: org.name,
+        superAdminId: superAdmin.id,
+        oldEmail: superAdmin.email,
+        newEmail: normalizedNewEmail,
+        targetRole: superAdmin.role,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return {
+      message: 'Organisation Super Admin credentials updated successfully',
+      data: {
+        userId: superAdmin.id,
+        email: normalizedNewEmail,
+        organisationId: org.id,
+        role: superAdmin.role,
+        mustChangePassword: true,
+      },
+    };
+  }
+
+  /**
    * Generates a cryptographically secure temporary password.
    * Format: 3 uppercase + 3 lowercase + 3 digits + 3 symbols = 12 chars min.
    */
@@ -375,7 +562,7 @@ export class PlatformOrganisationService {
           contactPhone: dto.contactPhone || null,
           status: OrganisationStatus.ACTIVE,
           tier: dto.tier || 'STANDARD',
-          maxRecruiters: dto.maxRecruiters || 5,
+          recruiterLimit: dto.recruiterLimit ?? dto.maxRecruiters ?? 25,
           metadata: {
             create: {
               industry: dto.industry || null,
@@ -500,6 +687,9 @@ export class PlatformOrganisationService {
       throw new NotFoundException(`Organisation with ID ${id} not found`);
     }
 
+    const newRecruiterLimit = dto.recruiterLimit ?? dto.maxRecruiters;
+    const limitChanged = newRecruiterLimit !== undefined && newRecruiterLimit !== existing.recruiterLimit;
+
     const updated = await this.prisma.organisation.update({
       where: { id },
       data: {
@@ -508,7 +698,7 @@ export class PlatformOrganisationService {
         contactEmail: dto.contactEmail,
         contactPhone: dto.contactPhone,
         tier: dto.tier,
-        maxRecruiters: dto.maxRecruiters,
+        recruiterLimit: newRecruiterLimit,
         metadata: {
           upsert: {
             create: {
@@ -526,6 +716,23 @@ export class PlatformOrganisationService {
       },
       include: { metadata: true },
     });
+
+    if (limitChanged) {
+      await this.auditService.record({
+        actorId: actor.userId,
+        actorRole: actor.role,
+        action: 'RECRUITER_LIMIT_UPDATED',
+        entityType: 'ORGANISATION',
+        entityId: id,
+        organisationId: id,
+        metadata: {
+          previousLimit: existing.recruiterLimit,
+          newLimit: newRecruiterLimit,
+        },
+        ipAddress,
+        userAgent,
+      });
+    }
 
     await this.auditService.record({
       actorId: actor.userId,

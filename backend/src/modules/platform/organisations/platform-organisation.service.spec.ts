@@ -37,6 +37,8 @@ describe('PlatformOrganisationService', () => {
         findUnique: jest.fn().mockResolvedValue(null),
         findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+        groupBy: jest.fn().mockResolvedValue([]),
         create: jest.fn(),
         update: jest.fn(),
       },
@@ -246,6 +248,257 @@ describe('PlatformOrganisationService', () => {
     await expect(service.resetSuperAdminPassword('org_empty', mockActor)).rejects.toThrow(
       NotFoundException,
     );
+  });
+
+  it('should persist recruiterLimit when creating an organisation', async () => {
+    prisma.organisation.create.mockResolvedValue({
+      id: 'org_limit_1',
+      name: 'Limit Corp',
+      slug: 'limit-corp',
+      recruiterLimit: 30,
+      status: 'ACTIVE',
+      metadata: null,
+      tokenBalance: { balance: 0 },
+      createdAt: new Date(),
+    });
+    prisma.user.create.mockResolvedValue({
+      id: 'usr_lim_1',
+      email: 'admin@limit.corp',
+      role: 'ORGANISATION_SUPER_ADMIN',
+    });
+
+    await service.create(
+      {
+        name: 'Limit Corp',
+        slug: 'limit-corp',
+        contactEmail: 'talent@limit.corp',
+        recruiterLimit: 30,
+        superAdminName: 'Sam Limit',
+        superAdminEmail: 'admin@limit.corp',
+        superAdminPassword: 'Password@123',
+        superAdminPasswordConfirmation: 'Password@123',
+      },
+      mockActor,
+    );
+
+    expect(prisma.organisation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recruiterLimit: 30,
+        }),
+      }),
+    );
+  });
+
+  it('should record RECRUITER_LIMIT_UPDATED audit log when recruiterLimit is updated', async () => {
+    prisma.organisation.findUnique.mockResolvedValue({
+      id: 'org_edit_1',
+      name: 'Edit Corp',
+      recruiterLimit: 25,
+      metadata: null,
+    });
+    prisma.organisation.update.mockResolvedValue({
+      id: 'org_edit_1',
+      recruiterLimit: 50,
+      metadata: null,
+    });
+
+    await service.update('org_edit_1', { recruiterLimit: 50 }, mockActor);
+
+    expect(auditService.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'RECRUITER_LIMIT_UPDATED',
+        entityId: 'org_edit_1',
+        metadata: {
+          previousLimit: 25,
+          newLimit: 50,
+        },
+      }),
+    );
+  });
+
+  it('should return recruiterLimit, recruitersUsed, and recruitersAvailable in findOne', async () => {
+    prisma.organisation.findUnique.mockResolvedValue({
+      id: 'org_usage_1',
+      name: 'Usage Corp',
+      recruiterLimit: 20,
+      _count: { users: 15, tokenTransactions: 2 },
+      metadata: null,
+      tokenBalance: null,
+      allocationLimit: null,
+    });
+    prisma.auditLog.findMany.mockResolvedValue([]);
+    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.user.count.mockResolvedValue(12); // 12 active recruiters
+
+    const result = await service.findOne('org_usage_1');
+
+    expect(result.recruiterLimit).toBe(20);
+    expect(result.recruitersUsed).toBe(12);
+    expect(result.recruitersAvailable).toBe(8);
+  });
+
+  describe('transferSuperAdminCredentials', () => {
+    const orgId = 'org_acme_1';
+    const existingSuperAdmin = {
+      id: 'usr_super_123',
+      email: 'admin@acme.com',
+      role: UserRole.ORGANISATION_SUPER_ADMIN,
+      organisationId: orgId,
+      firstName: 'John',
+      lastName: 'Acme',
+    };
+
+    it('should successfully transfer Organisation Super Admin credentials while preserving user ID and org data', async () => {
+      prisma.organisation.findUnique.mockResolvedValue({
+        id: orgId,
+        name: 'Acme Corporation',
+      });
+      prisma.user.findMany.mockResolvedValue([existingSuperAdmin]);
+      prisma.user.findUnique.mockResolvedValue(null); // new email is not taken
+      prisma.user.update.mockResolvedValue({
+        ...existingSuperAdmin,
+        email: 'newadmin@acme.com',
+        mustChangePassword: true,
+      });
+
+      const result = await service.transferSuperAdminCredentials(
+        orgId,
+        {
+          newEmail: 'newadmin@acme.com',
+          newPassword: 'NewPassword123!',
+          confirmPassword: 'NewPassword123!',
+        },
+        mockActor,
+        '127.0.0.1',
+        'test-agent',
+      );
+
+      // 1. Same user ID
+      expect(result.data.userId).toBe(existingSuperAdmin.id);
+      // 2. Same organisation ID
+      expect(result.data.organisationId).toBe(orgId);
+      // 3. Same role
+      expect(result.data.role).toBe(UserRole.ORGANISATION_SUPER_ADMIN);
+      // 4. New email saved
+      expect(result.data.email).toBe('newadmin@acme.com');
+      // 5. mustChangePassword is true
+      expect(result.data.mustChangePassword).toBe(true);
+      // 6. Password or passwordHash is never returned
+      expect((result as any).password).toBeUndefined();
+      expect((result as any).passwordHash).toBeUndefined();
+      expect((result.data as any).password).toBeUndefined();
+      expect((result.data as any).passwordHash).toBeUndefined();
+
+      // 7. Prisma user.update called with hashed password (not plaintext)
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: existingSuperAdmin.id },
+          data: expect.objectContaining({
+            email: 'newadmin@acme.com',
+            mustChangePassword: true,
+            passwordHash: expect.not.stringContaining('NewPassword123!'),
+          }),
+        }),
+      );
+
+      // 8. Old sessions are invalidated (revokedAt is set)
+      expect(prisma.platformSession.updateMany).toHaveBeenCalledWith({
+        where: { userId: existingSuperAdmin.id, revokedAt: null },
+        data: expect.objectContaining({ revokedAt: expect.any(Date) }),
+      });
+
+      // 9. Audit log created without passwords
+      expect(auditService.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: mockActor.userId,
+          action: 'ORGANISATION_SUPER_ADMIN_CREDENTIALS_TRANSFERRED',
+          entityType: 'USER',
+          entityId: existingSuperAdmin.id,
+          organisationId: orgId,
+          metadata: {
+            organisationName: 'Acme Corporation',
+            superAdminId: existingSuperAdmin.id,
+            oldEmail: 'admin@acme.com',
+            newEmail: 'newadmin@acme.com',
+            targetRole: UserRole.ORGANISATION_SUPER_ADMIN,
+          },
+        }),
+      );
+
+      const auditCall = auditService.record.mock.calls.find(
+        (c: any[]) => c[0].action === 'ORGANISATION_SUPER_ADMIN_CREDENTIALS_TRANSFERRED',
+      );
+      expect(JSON.stringify(auditCall)).not.toContain('NewPassword123!');
+    });
+
+    it('should reject when password and confirmPassword do not match', async () => {
+      await expect(
+        service.transferSuperAdminCredentials(
+          orgId,
+          {
+            newEmail: 'newadmin@acme.com',
+            newPassword: 'Password123!',
+            confirmPassword: 'MismatchPassword123!',
+          },
+          mockActor,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject when organisation is not found', async () => {
+      prisma.organisation.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.transferSuperAdminCredentials(
+          'non_existent_org',
+          {
+            newEmail: 'newadmin@acme.com',
+            newPassword: 'Password123!',
+            confirmPassword: 'Password123!',
+          },
+          mockActor,
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should reject when organisation has no Super Admin', async () => {
+      prisma.organisation.findUnique.mockResolvedValue({ id: orgId, name: 'Acme' });
+      prisma.user.findMany.mockResolvedValue([]);
+
+      await expect(
+        service.transferSuperAdminCredentials(
+          orgId,
+          {
+            newEmail: 'newadmin@acme.com',
+            newPassword: 'Password123!',
+            confirmPassword: 'Password123!',
+          },
+          mockActor,
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should reject when new email is already registered to another user', async () => {
+      prisma.organisation.findUnique.mockResolvedValue({ id: orgId, name: 'Acme' });
+      prisma.user.findMany.mockResolvedValue([existingSuperAdmin]);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'different_user_456',
+        email: 'taken@acme.com',
+      });
+
+      await expect(
+        service.transferSuperAdminCredentials(
+          orgId,
+          {
+            newEmail: 'taken@acme.com',
+            newPassword: 'Password123!',
+            confirmPassword: 'Password123!',
+          },
+          mockActor,
+        ),
+      ).rejects.toThrow(ConflictException);
+    });
   });
 });
 

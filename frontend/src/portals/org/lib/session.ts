@@ -13,9 +13,27 @@ export const TOKEN_KEY = 'clyptus_org_token';
 
 export const getToken = () => {
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    return sessionStorage.getItem(TOKEN_KEY);
   } catch {
     return null;
+  }
+};
+
+export const setToken = (token: string) => {
+  try {
+    sessionStorage.setItem(TOKEN_KEY, token);
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // Storage may be unavailable
+  }
+};
+
+export const clearToken = () => {
+  try {
+    sessionStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // Storage may be unavailable
   }
 };
 
@@ -48,7 +66,7 @@ export function useWallet() {
 
 export async function login(email: string, password: string) {
   const res = await api.post<{ accessToken: string; requiresPasswordChange?: boolean }>('/org/auth/login', { email, password });
-  localStorage.setItem(TOKEN_KEY, res.accessToken);
+  setToken(res.accessToken);
   return res;
 }
 
@@ -60,7 +78,7 @@ export function useLogout() {
     } catch {
       // session may already be gone
     }
-    localStorage.removeItem(TOKEN_KEY);
+    clearToken();
     qc.clear();
     window.location.assign('/org/login');
   }, [qc]);

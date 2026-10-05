@@ -10,7 +10,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { isAuthError } from '../lib/api';
 import { useRealtime } from '../lib/realtime';
-import { ROLE_LABEL, TOKEN_KEY, getToken, useLogout, useMe, usePermissions } from '../lib/session';
+import { ROLE_LABEL, TOKEN_KEY, clearToken, getToken, useLogout, useMe, usePermissions } from '../lib/session';
 import { Toaster } from '../ui/toast';
 import { Avatar, Skeleton, cn } from '../ui/ui';
 import { NAV, loaders } from './nav';
@@ -169,7 +169,7 @@ export function OrgShell() {
   useEffect(() => {
     return qc.getQueryCache().subscribe((event) => {
       if (event.type === 'updated' && event.query.state.status === 'error' && isAuthError(event.query.state.error)) {
-        localStorage.removeItem(TOKEN_KEY);
+        clearToken();
         window.location.assign('/org/login');
       }
     });
@@ -207,7 +207,7 @@ export function OrgShell() {
     );
   }
   if (sessionRejected) {
-    localStorage.removeItem(TOKEN_KEY);
+    clearToken();
     return <Navigate to="/org/login" replace state={{ message: (error as { message?: string }).message }} />;
   }
 

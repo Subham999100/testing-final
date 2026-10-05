@@ -219,3 +219,157 @@ export interface PlatformMonitoringOverview {
   }>;
 }
 
+// ============================================================
+// SUPPORT CASE MANAGEMENT TYPES
+// ============================================================
+
+export type SupportTicketStatus =
+  | 'OPEN'
+  | 'IN_PROGRESS'
+  | 'WAITING_FOR_USER'
+  | 'RESOLVED'
+  | 'CLOSED';
+
+export type SupportTicketPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+
+export type SupportTicketCategory =
+  | 'ACCOUNT'
+  | 'AUTHENTICATION'
+  | 'JOB'
+  | 'RECRUITER'
+  | 'APPLICATION'
+  | 'PAYMENT'
+  | 'TECHNICAL'
+  | 'OTHER';
+
+export interface SupportMessage {
+  id: string;
+  ticketId: string;
+  authorId: string;
+  body: string;
+  isInternal: boolean;
+  createdAt: string;
+  author: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+  };
+}
+
+export interface SupportTicket {
+  id: string;
+  ticketNumber: number;
+  organisationId?: string | null;
+  createdByUserId: string;
+  assignedToUserId?: string | null;
+  subject: string;
+  description: string;
+  status: SupportTicketStatus;
+  priority: SupportTicketPriority;
+  category: SupportTicketCategory;
+  resolutionNotes?: string | null;
+  resolvedAt?: string | null;
+  closedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messageCount?: number;
+  organisation?: {
+    id: string;
+    name: string;
+    slug: string;
+    tier: string;
+    contactEmail: string;
+  } | null;
+  createdByUser: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+  };
+  assignedToUser?: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+  } | null;
+  messages?: SupportMessage[];
+}
+
+export interface SupportSummary {
+  open: number;
+  inProgress: number;
+  urgent: number;
+  resolved: number;
+}
+
+export interface SupportTicketsResponse {
+  data: SupportTicket[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+  summary: SupportSummary;
+}
+
+// ============================================================
+// REPORTS & ANALYTICS TYPES
+// ============================================================
+
+export interface ReportsOverview {
+  timeframe: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  organisationId?: string | null;
+  organisations: {
+    total: number;
+    active: number;
+    suspended: number;
+    pending: number;
+    createdInPeriod: number;
+  };
+  users: {
+    total: number;
+    active: number;
+    byRole: Array<{ role: string; count: number }>;
+  };
+  recruiters: {
+    total: number;
+    active: number;
+  };
+  jobs: {
+    total: number;
+    active: number;
+    draft: number;
+    closed: number;
+    createdInPeriod: number;
+  };
+  applications: {
+    total: number;
+    appliedInPeriod: number;
+    byStage: Array<{ stage: string; count: number }>;
+  };
+  trends: Array<{
+    month: string;
+    organisations: number;
+    jobs: number;
+    applications: number;
+  }>;
+  topOrganisations: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    status: string;
+    tier: string;
+    recruiters: number;
+    jobs: number;
+    applications: number;
+    createdAt: string;
+  }>;
+}
+

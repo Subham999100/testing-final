@@ -31,9 +31,17 @@ import {
   validateGrant,
 } from '../common/org-permissions';
 import { OrgTokenService } from '../common/org-token.service';
+import * as bcrypt from 'bcryptjs';
 import { pageResult, paging, userSummaries } from '../common/org-helpers';
 import { hashToken } from '../auth/org-auth.service';
-import { CreateInvitationDto, InvitationQueryDto, MemberQueryDto } from './dto';
+import {
+  CreateAdminDto,
+  CreateInvitationDto,
+  CreateRecruiterDto,
+  InvitationQueryDto,
+  MemberQueryDto,
+  ResetMemberPasswordDto,
+} from './dto';
 
 const INVITE_TTL_DAYS = Number(process.env.ORG_INVITE_TTL_DAYS) || 7;
 
@@ -228,7 +236,13 @@ export class TeamService {
       this.prisma.user.update({ where: { id: userId }, data: { isActive: false } }),
     ]);
     await this.revokeSessions(userId);
-    await this.events.audit(ctx, 'MEMBER_SUSPENDED', 'ORG_MEMBER', userId, { email: p.user.email });
+    await this.events.audit(
+      ctx,
+      p.user.role === UserRole.RECRUITER ? 'RECRUITER_SUSPENDED' : 'MEMBER_SUSPENDED',
+      'ORG_MEMBER',
+      userId,
+      { email: p.user.email, role: p.user.role },
+    );
     this.events.emit(ctx.organisationId, 'member.updated', { userId });
     return { id: userId, status: 'SUSPENDED' };
   }
@@ -242,7 +256,13 @@ export class TeamService {
       this.prisma.orgMemberProfile.update({ where: { userId }, data: { status: 'ACTIVE' } }),
       this.prisma.user.update({ where: { id: userId }, data: { isActive: true } }),
     ]);
-    await this.events.audit(ctx, 'MEMBER_REACTIVATED', 'ORG_MEMBER', userId, { email: p.user.email });
+    await this.events.audit(
+      ctx,
+      p.user.role === UserRole.RECRUITER ? 'RECRUITER_REACTIVATED' : 'MEMBER_REACTIVATED',
+      'ORG_MEMBER',
+      userId,
+      { email: p.user.email, role: p.user.role },
+    );
     this.events.emit(ctx.organisationId, 'member.updated', { userId });
     return { id: userId, status: 'ACTIVE' };
   }
@@ -264,13 +284,289 @@ export class TeamService {
   }
 
   private async assertRecruiterSeat(organisationId: string, pendingInvites: number) {
-    const org = await this.prisma.organisation.findUnique({ where: { id: organisationId }, select: { maxRecruiters: true } });
+    const org = await this.prisma.organisation.findUnique({
+      where: { id: organisationId },
+      select: { recruiterLimit: true },
+    });
+    const limit = org?.recruiterLimit ?? 25;
     const active = await this.prisma.orgMemberProfile.count({
       where: { organisationId, status: 'ACTIVE', user: { role: UserRole.RECRUITER } },
     });
-    if (active + pendingInvites >= (org?.maxRecruiters ?? 0)) {
-      throw new BadRequestException(`Recruiter seat limit reached (${org?.maxRecruiters}). Contact the platform team to raise it.`);
+    if (active + pendingInvites >= limit) {
+      throw new ConflictException(`Recruiter seat limit reached (${limit}). Contact the platform team to raise it.`);
     }
+  }
+
+  // ---------------- admin & recruiter direct provisioning ----------------
+
+  async getAdmin(ctx: OrgContext) {
+    const admin = await this.prisma.user.findFirst({
+      where: {
+        organisationId: ctx.organisationId,
+        role: UserRole.ORGANISATION_ADMIN,
+        isActive: true,
+      },
+      include: {
+        orgMemberProfile: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!admin) return null;
+    return {
+      id: admin.id,
+      name: `${admin.firstName} ${admin.lastName}`.trim(),
+      firstName: admin.firstName,
+      lastName: admin.lastName,
+      email: admin.email,
+      role: admin.role,
+      isActive: admin.isActive,
+      status: admin.orgMemberProfile?.status || 'ACTIVE',
+      mustChangePassword: admin.mustChangePassword,
+      createdAt: admin.createdAt,
+    };
+  }
+
+  async createAdmin(ctx: OrgContext, dto: CreateAdminDto) {
+    assertCan(ctx, 'org_admins.manage');
+
+    if (dto.password !== dto.confirmPassword) {
+      throw new BadRequestException('Passwords do not match');
+    }
+
+    const email = dto.email.toLowerCase().trim();
+    const nameParts = dto.name.trim().split(/\s+/);
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ') || '-';
+
+    const admin = await this.prisma.$transaction(async (tx) => {
+      // Invariant: Exactly one active Organisation Admin per organisation
+      const existingAdmin = await tx.user.findFirst({
+        where: {
+          organisationId: ctx.organisationId,
+          role: UserRole.ORGANISATION_ADMIN,
+          isActive: true,
+        },
+      });
+
+      if (existingAdmin) {
+        throw new ConflictException('Organisation already has an Organisation Admin');
+      }
+
+      // Check global email uniqueness
+      const existingUser = await tx.user.findUnique({
+        where: { email },
+      });
+      if (existingUser) {
+        throw new ConflictException(`A user with email '${dto.email}' already exists`);
+      }
+
+      const passwordHash = await bcrypt.hash(dto.password, 12);
+
+      const user = await tx.user.create({
+        data: {
+          email,
+          passwordHash,
+          firstName,
+          lastName,
+          role: UserRole.ORGANISATION_ADMIN,
+          organisationId: ctx.organisationId,
+          isActive: true,
+          isEmailVerified: true,
+          mustChangePassword: true,
+          orgMemberProfile: {
+            create: {
+              organisationId: ctx.organisationId,
+              permissions: ROLE_DEFAULTS.ORGANISATION_ADMIN,
+              invitedById: ctx.userId,
+            },
+          },
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          role: true,
+          isActive: true,
+          mustChangePassword: true,
+          createdAt: true,
+        },
+      });
+
+      return user;
+    });
+
+    await this.events.audit(ctx, 'ORGANISATION_ADMIN_CREATED', 'USER', admin.id, {
+      email: admin.email,
+      role: admin.role,
+      name: `${admin.firstName} ${admin.lastName}`.trim(),
+    });
+
+    this.events.emit(ctx.organisationId, 'member.updated', { userId: admin.id });
+
+    return {
+      id: admin.id,
+      name: `${admin.firstName} ${admin.lastName}`.trim(),
+      firstName: admin.firstName,
+      lastName: admin.lastName,
+      email: admin.email,
+      role: admin.role,
+      isActive: admin.isActive,
+      mustChangePassword: admin.mustChangePassword,
+      createdAt: admin.createdAt,
+    };
+  }
+
+  async getRecruiterUsage(ctx: OrgContext) {
+    const org = await this.prisma.organisation.findUnique({
+      where: { id: ctx.organisationId },
+      select: { recruiterLimit: true },
+    });
+    if (!org) {
+      throw new NotFoundException('Organisation not found');
+    }
+
+    const limit = org.recruiterLimit ?? 25;
+    const used = await this.prisma.user.count({
+      where: {
+        organisationId: ctx.organisationId,
+        role: UserRole.RECRUITER,
+        isActive: true,
+      },
+    });
+
+    return {
+      limit,
+      used,
+      available: Math.max(0, limit - used),
+    };
+  }
+
+  async createRecruiter(ctx: OrgContext, dto: CreateRecruiterDto) {
+    assertCan(ctx, 'recruiters.manage');
+
+    if (dto.password !== dto.confirmPassword) {
+      throw new BadRequestException('Passwords do not match');
+    }
+
+    const email = dto.email.toLowerCase().trim();
+    const nameParts = dto.name.trim().split(/\s+/);
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ') || '-';
+
+    const recruiter = await this.prisma.$transaction(async (tx) => {
+      // Row lock the organisation row to prevent race conditions during concurrent recruiter creation
+      const [org] = await tx.$queryRaw<Array<{ id: string; maxRecruiters: number }>>`
+        SELECT id, "maxRecruiters" FROM "organisations" WHERE id = ${ctx.organisationId} FOR UPDATE
+      `;
+      if (!org) {
+        throw new NotFoundException('Organisation not found');
+      }
+
+      const limit = org.maxRecruiters ?? 25;
+
+      const currentRecruiters = await tx.user.count({
+        where: {
+          organisationId: ctx.organisationId,
+          role: UserRole.RECRUITER,
+          isActive: true,
+        },
+      });
+
+      if (currentRecruiters >= limit) {
+        throw new ConflictException(`Recruiter limit reached. Maximum allowed: ${limit}`);
+      }
+
+      const existingUser = await tx.user.findUnique({
+        where: { email },
+      });
+      if (existingUser) {
+        throw new ConflictException(`A user with email '${dto.email}' already exists`);
+      }
+
+      const passwordHash = await bcrypt.hash(dto.password, 12);
+
+      const user = await tx.user.create({
+        data: {
+          email,
+          passwordHash,
+          firstName,
+          lastName,
+          role: UserRole.RECRUITER,
+          organisationId: ctx.organisationId,
+          isActive: true,
+          isEmailVerified: true,
+          mustChangePassword: true,
+          orgMemberProfile: {
+            create: {
+              organisationId: ctx.organisationId,
+              permissions: ROLE_DEFAULTS.RECRUITER,
+              invitedById: ctx.userId,
+            },
+          },
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          role: true,
+          isActive: true,
+          mustChangePassword: true,
+          createdAt: true,
+        },
+      });
+
+      return user;
+    });
+
+    await this.events.audit(ctx, 'RECRUITER_CREATED', 'USER', recruiter.id, {
+      email: recruiter.email,
+      role: recruiter.role,
+      name: `${recruiter.firstName} ${recruiter.lastName}`.trim(),
+    });
+
+    this.events.emit(ctx.organisationId, 'member.updated', { userId: recruiter.id });
+
+    return {
+      id: recruiter.id,
+      name: `${recruiter.firstName} ${recruiter.lastName}`.trim(),
+      firstName: recruiter.firstName,
+      lastName: recruiter.lastName,
+      email: recruiter.email,
+      role: recruiter.role,
+      isActive: recruiter.isActive,
+      mustChangePassword: recruiter.mustChangePassword,
+      createdAt: recruiter.createdAt,
+    };
+  }
+
+  async resetMemberPassword(ctx: OrgContext, userId: string, dto: ResetMemberPasswordDto) {
+    if (dto.password !== dto.confirmPassword) {
+      throw new BadRequestException('Passwords do not match');
+    }
+
+    const p = await this.getProfile(ctx, userId);
+    this.assertManageable(ctx, userId, p.user.role);
+
+    const passwordHash = await bcrypt.hash(dto.password, 12);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        passwordHash,
+        mustChangePassword: true,
+      },
+    });
+
+    await this.revokeSessions(userId);
+
+    const action = p.user.role === UserRole.RECRUITER ? 'RECRUITER_PASSWORD_RESET' : 'MEMBER_PASSWORD_RESET';
+    await this.events.audit(ctx, action, 'USER', userId, {
+      email: p.user.email,
+      role: p.user.role,
+    });
+
+    return { message: 'Password reset successfully', mustChangePassword: true };
   }
 
   // ---------------- invitations ----------------

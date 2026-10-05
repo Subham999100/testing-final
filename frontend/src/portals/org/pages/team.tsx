@@ -1,12 +1,17 @@
 // ============================================================
-// Organisation portal — members, permission matrix, invitations.
-// The permission editor shows the platform ceiling for the member's
-// role and only enables keys the viewer is allowed to grant.
+// Organisation portal — members, permission matrix, organisation admin,
+// direct recruiter provisioning, and recruiter limits.
 // ============================================================
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Mail, RotateCw, UserPlus, Users, XCircle } from 'lucide-react';
+import {
+  AlertCircle,
+  KeyRound,
+  Shield,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -50,6 +55,25 @@ interface MemberRow {
   canManage: boolean;
 }
 
+interface AdminData {
+  id: string;
+  name: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: string;
+  isActive: boolean;
+  status: string;
+  mustChangePassword: boolean;
+  createdAt: string;
+}
+
+interface RecruiterUsage {
+  limit: number;
+  used: number;
+  available: number;
+}
+
 interface Catalog {
   catalog: { key: string; group: string; label: string }[];
   ceilings: Record<string, string[]>;
@@ -61,7 +85,235 @@ export function useCatalog() {
   return useQuery({ queryKey: qk.catalog, queryFn: () => api.get<Catalog>('/org/permissions/catalog'), staleTime: STALE.static });
 }
 
-// ---------------- Members ----------------
+// ---------------- Direct Provisioning Modals ----------------
+
+const adminSchema = z
+  .object({
+    name: z.string().min(1, 'Full name is required').max(120),
+    email: z.string().email('Enter a valid email address'),
+    password: z.string().min(8, 'Password must be at least 8 characters long'),
+    confirmPassword: z.string().min(1, 'Please confirm password'),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
+
+function CreateAdminSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { register, handleSubmit, reset, formState } = useForm<z.infer<typeof adminSchema>>({
+    resolver: zodResolver(adminSchema),
+    defaultValues: { name: '', email: '', password: '', confirmPassword: '' },
+  });
+
+  const create = useMutation({
+    mutationFn: (v: z.infer<typeof adminSchema>) => api.post('/org/admins', v),
+    onSuccess: () => {
+      toast.success('Organisation Admin created successfully');
+      qc.invalidateQueries({ queryKey: ['org', 'admins'] });
+      qc.invalidateQueries({ queryKey: qk.members.all });
+      reset();
+      onClose();
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
+
+  return (
+    <Sheet
+      open={open}
+      onClose={handleClose}
+      title="Create Organisation Admin"
+      footer={
+        <>
+          <Button variant="secondary" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button loading={create.isPending} onClick={handleSubmit((v) => create.mutate(v))}>
+            Create Admin
+          </Button>
+        </>
+      }
+    >
+      <p className="mb-4 text-xs text-slate-500">
+        Creates the primary Organisation Admin with direct credentials. Exactly one active admin is permitted.
+      </p>
+      <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+        <Field label="Full Name" error={formState.errors.name?.message}>
+          <Input placeholder="Jane Doe" autoFocus {...register('name')} />
+        </Field>
+        <Field label="Email Address" error={formState.errors.email?.message}>
+          <Input type="email" placeholder="admin@acme.com" {...register('email')} />
+        </Field>
+        <Field label="Initial Password" error={formState.errors.password?.message}>
+          <Input type="password" placeholder="Min 8 characters" {...register('password')} />
+        </Field>
+        <Field label="Confirm Password" error={formState.errors.confirmPassword?.message}>
+          <Input type="password" placeholder="Repeat password" {...register('confirmPassword')} />
+        </Field>
+        <p className="text-xs text-slate-500">
+          Newly created administrators will be prompted to change their password upon their first login.
+        </p>
+      </form>
+    </Sheet>
+  );
+}
+
+const recruiterSchema = z
+  .object({
+    name: z.string().min(1, 'Full name is required').max(120),
+    email: z.string().email('Enter a valid email address'),
+    password: z.string().min(8, 'Password must be at least 8 characters long'),
+    confirmPassword: z.string().min(1, 'Please confirm password'),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
+
+function CreateRecruiterSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { register, handleSubmit, reset, formState } = useForm<z.infer<typeof recruiterSchema>>({
+    resolver: zodResolver(recruiterSchema),
+    defaultValues: { name: '', email: '', password: '', confirmPassword: '' },
+  });
+
+  const create = useMutation({
+    mutationFn: (v: z.infer<typeof recruiterSchema>) => api.post('/org/recruiters', v),
+    onSuccess: () => {
+      toast.success('Recruiter created successfully');
+      qc.invalidateQueries({ queryKey: ['org', 'recruiters', 'usage'] });
+      qc.invalidateQueries({ queryKey: qk.members.all });
+      reset();
+      onClose();
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
+
+  return (
+    <Sheet
+      open={open}
+      onClose={handleClose}
+      title="Create Recruiter"
+      footer={
+        <>
+          <Button variant="secondary" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button loading={create.isPending} onClick={handleSubmit((v) => create.mutate(v))}>
+            Create Recruiter
+          </Button>
+        </>
+      }
+    >
+      <p className="mb-4 text-xs text-slate-500">
+        Creates a recruiter account with direct credentials under the organisation's recruiter seat limit.
+      </p>
+      <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+        <Field label="Full Name" error={formState.errors.name?.message}>
+          <Input placeholder="John Smith" autoFocus {...register('name')} />
+        </Field>
+        <Field label="Email Address" error={formState.errors.email?.message}>
+          <Input type="email" placeholder="recruiter@acme.com" {...register('email')} />
+        </Field>
+        <Field label="Initial Password" error={formState.errors.password?.message}>
+          <Input type="password" placeholder="Min 8 characters" {...register('password')} />
+        </Field>
+        <Field label="Confirm Password" error={formState.errors.confirmPassword?.message}>
+          <Input type="password" placeholder="Repeat password" {...register('confirmPassword')} />
+        </Field>
+        <p className="text-xs text-slate-500">
+          Newly created recruiters will be prompted to change their password upon their first login.
+        </p>
+      </form>
+    </Sheet>
+  );
+}
+
+const resetPasswordSchema = z
+  .object({
+    password: z.string().min(8, 'Password must be at least 8 characters long'),
+    confirmPassword: z.string().min(1, 'Please confirm password'),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
+
+function ResetPasswordSheet({
+  user,
+  onClose,
+}: {
+  user: { id: string; name: string; email: string } | null;
+  onClose: () => void;
+}) {
+  const { register, handleSubmit, reset, formState } = useForm<z.infer<typeof resetPasswordSchema>>({
+    resolver: zodResolver(resetPasswordSchema),
+    defaultValues: { password: '', confirmPassword: '' },
+  });
+
+  const resetPwd = useMutation({
+    mutationFn: (v: z.infer<typeof resetPasswordSchema>) =>
+      api.post(`/org/members/${user?.id}/reset-password`, v),
+    onSuccess: () => {
+      toast.success('Password reset successfully. User must change password on next login.');
+      reset();
+      onClose();
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
+
+  return (
+    <Sheet
+      open={!!user}
+      onClose={handleClose}
+      title="Reset Password"
+      footer={
+        <>
+          <Button variant="secondary" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button loading={resetPwd.isPending} onClick={handleSubmit((v) => resetPwd.mutate(v))}>
+            Reset Password
+          </Button>
+        </>
+      }
+    >
+      {user && (
+        <p className="mb-4 text-xs text-slate-500">
+          Set a new password for <span className="font-semibold text-slate-700">{user.name}</span> ({user.email})
+        </p>
+      )}
+      <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+        <Field label="New Password" error={formState.errors.password?.message}>
+          <Input type="password" placeholder="Min 8 characters" autoFocus {...register('password')} />
+        </Field>
+        <Field label="Confirm New Password" error={formState.errors.confirmPassword?.message}>
+          <Input type="password" placeholder="Repeat password" {...register('confirmPassword')} />
+        </Field>
+        <p className="text-xs text-slate-500">
+          This will invalidate all current active sessions for this user and require them to set a new password upon login.
+        </p>
+      </form>
+    </Sheet>
+  );
+}
+
+// ---------------- Members Page ----------------
 
 export function MembersPage() {
   const navigate = useNavigate();
@@ -70,9 +322,31 @@ export function MembersPage() {
   const [status, setStatus] = useState(params.get('status') ?? '');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [inviting, setInviting] = useState(false);
+  const [creatingAdmin, setCreatingAdmin] = useState(false);
+  const [creatingRecruiter, setCreatingRecruiter] = useState(false);
+  const [resettingUser, setResettingUser] = useState<{ id: string; name: string; email: string } | null>(null);
+
   const q = useDebounced(search);
   const { can } = usePermissions();
+
+  const { data: admin } = useQuery<AdminData | null>({
+    queryKey: ['org', 'admins'],
+    queryFn: () => api.get<AdminData | null>('/org/admins'),
+    staleTime: STALE.list,
+  });
+
+  const { data: usage } = useQuery<RecruiterUsage>({
+    queryKey: ['org', 'recruiters', 'usage'],
+    queryFn: () => api.get<RecruiterUsage>('/org/recruiters/usage'),
+    staleTime: STALE.list,
+  });
+
+  const recruiterLimit = usage?.limit ?? 25;
+  const recruitersUsed = usage?.used ?? 0;
+  const recruitersAvailable = usage?.available ?? Math.max(0, recruiterLimit - recruitersUsed);
+  const isLimitReached = recruitersAvailable <= 0;
+  const hasActiveAdmin = !!admin && admin.isActive;
+
   const filters = { role, status, search: q, page };
   const { data, isFetching } = useQuery({
     queryKey: qk.members.list(filters),
@@ -80,21 +354,123 @@ export function MembersPage() {
     placeholderData: keepPreviousData,
     staleTime: STALE.list,
   });
+
   useEffect(() => setPage(1), [role, status, q]);
 
   return (
     <>
       <PageHeader
-        title="Members"
-        subtitle="Organisation admins and recruiters in your workspace."
+        title="Team Management"
+        subtitle="Manage Organisation Admin, Recruiters, and workspace team members."
         actions={
-          can('invitations.manage') && (
-            <Button icon={UserPlus} onClick={() => setInviting(true)}>
-              Invite member
-            </Button>
-          )
+          <div className="flex items-center gap-2">
+            {can('org_admins.manage') && (
+              <Button
+                variant="secondary"
+                icon={Shield}
+                disabled={hasActiveAdmin}
+                title={hasActiveAdmin ? 'Organisation already has an Organisation Admin (1 max)' : undefined}
+                onClick={() => setCreatingAdmin(true)}
+              >
+                Create Org Admin
+              </Button>
+            )}
+            {can('recruiters.manage') && (
+              <Button
+                icon={UserPlus}
+                disabled={isLimitReached}
+                title={isLimitReached ? `Recruiter limit reached (${recruiterLimit}/${recruiterLimit})` : undefined}
+                onClick={() => setCreatingRecruiter(true)}
+              >
+                Create Recruiter
+              </Button>
+            )}
+          </div>
         }
       />
+
+      {/* Summary Cards */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-2">
+        <Card className="p-5">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-indigo-600" />
+              <h3 className="font-semibold text-slate-800">Organisation Admin</h3>
+            </div>
+            <Badge tone="violet">Max 1 Active</Badge>
+          </div>
+          {admin ? (
+            <div className="mt-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Avatar name={admin.name} />
+                <div>
+                  <p className="font-medium text-slate-900">{admin.name}</p>
+                  <p className="text-xs text-slate-500">{admin.email}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <StatusBadge status={admin.status} />
+                <Button size="sm" variant="secondary" onClick={() => navigate(`/org/members/${admin.id}`)}>
+                  View
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-xs text-slate-500">No Organisation Admin created yet.</p>
+              {can('org_admins.manage') && (
+                <Button size="sm" variant="secondary" onClick={() => setCreatingAdmin(true)}>
+                  Create Admin
+                </Button>
+              )}
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-600" />
+              <h3 className="font-semibold text-slate-800">Recruiters & Capacity</h3>
+            </div>
+            <span
+              className={`font-mono text-xs font-semibold px-2 py-0.5 rounded-full ${
+                isLimitReached ? 'bg-rose-100 text-rose-700' : 'bg-blue-50 text-blue-700'
+              }`}
+            >
+              {recruitersUsed} / {recruiterLimit} Seats
+            </span>
+          </div>
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center justify-between text-xs text-slate-600">
+              <span>
+                Recruiters Used: <strong className="text-slate-900">{recruitersUsed}</strong>
+              </span>
+              <span>
+                Available:{' '}
+                <strong className={isLimitReached ? 'text-rose-600' : 'text-emerald-600'}>
+                  {recruitersAvailable}
+                </strong>
+              </span>
+            </div>
+            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all ${
+                  isLimitReached ? 'bg-rose-500' : recruitersUsed / recruiterLimit > 0.8 ? 'bg-amber-500' : 'bg-indigo-600'
+                }`}
+                style={{ width: `${Math.min(100, Math.round((recruitersUsed / (recruiterLimit || 1)) * 100))}%` }}
+              />
+            </div>
+            {isLimitReached && (
+              <p className="text-[11px] text-rose-600 flex items-center gap-1 font-medium pt-1">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                Recruiter seat limit reached ({recruiterLimit}/{recruiterLimit}). Contact Platform Admin to increase seats.
+              </p>
+            )}
+          </div>
+        </Card>
+      </div>
+
       <DataTable
         loading={isFetching && !data}
         rows={data?.data}
@@ -113,17 +489,35 @@ export function MembersPage() {
               ]}
             />
             <div className="flex flex-1 gap-2 sm:justify-end">
-              <Select value={status} onChange={(e) => { setStatus(e.target.value); setParams({}); }} className="w-36">
+              <Select
+                value={status}
+                onChange={(e) => {
+                  setStatus(e.target.value);
+                  setParams({});
+                }}
+                className="w-36"
+              >
                 <option value="">Active & suspended</option>
                 <option value="ACTIVE">Active</option>
                 <option value="SUSPENDED">Suspended</option>
                 <option value="REMOVED">Removed</option>
               </Select>
-              <Input placeholder="Search name or email" value={search} onChange={(e) => setSearch(e.target.value)} className="sm:w-64" />
+              <Input
+                placeholder="Search name or email"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="sm:w-64"
+              />
             </div>
           </div>
         }
-        empty={<EmptyState icon={Users} title="No members match" text="Try a different filter or invite someone new." />}
+        empty={
+          <EmptyState
+            icon={Users}
+            title="No members match"
+            text="Try a different filter or create a new team member."
+          />
+        }
         columns={[
           {
             key: 'name',
@@ -138,19 +532,66 @@ export function MembersPage() {
               </div>
             ),
           },
-          { key: 'role', header: 'Role', cell: (m) => <Badge tone={m.role === 'RECRUITER' ? 'blue' : 'violet'}>{ROLE_LABEL[m.role]}</Badge> },
+          {
+            key: 'role',
+            header: 'Role',
+            cell: (m) => (
+              <Badge tone={m.role === 'RECRUITER' ? 'blue' : m.role === 'ORGANISATION_ADMIN' ? 'violet' : 'amber'}>
+                {ROLE_LABEL[m.role]}
+              </Badge>
+            ),
+          },
           { key: 'status', header: 'Status', cell: (m) => <StatusBadge status={m.status} /> },
-          { key: 'work', header: 'Workload', hideOnMobile: true, cell: (m) => <span className="text-xs text-slate-500">{m.openJobs} jobs · {m.openApplications} applications</span> },
-          { key: 'tokens', header: 'Tokens left', hideOnMobile: true, cell: (m) => m.tokensRemaining.toLocaleString() },
+          {
+            key: 'work',
+            header: 'Workload',
+            hideOnMobile: true,
+            cell: (m) => (
+              <span className="text-xs text-slate-500">
+                {m.openJobs} jobs · {m.openApplications} applications
+              </span>
+            ),
+          },
+          {
+            key: 'tokens',
+            header: 'Tokens left',
+            hideOnMobile: true,
+            cell: (m) => m.tokensRemaining.toLocaleString(),
+          },
           { key: 'joined', header: 'Joined', hideOnMobile: true, cell: (m) => fmtDate(m.joinedAt) },
+          {
+            key: 'actions',
+            header: '',
+            className: 'text-right',
+            cell: (m) =>
+              m.canManage && (
+                <div className="flex justify-end gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={KeyRound}
+                    title="Reset Password"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setResettingUser({ id: m.id, name: m.name, email: m.email });
+                    }}
+                  >
+                    Reset
+                  </Button>
+                </div>
+              ),
+          },
         ]}
       />
-      <InviteSheet open={inviting} onClose={() => setInviting(false)} />
+
+      <CreateAdminSheet open={creatingAdmin} onClose={() => setCreatingAdmin(false)} />
+      <CreateRecruiterSheet open={creatingRecruiter} onClose={() => setCreatingRecruiter(false)} />
+      <ResetPasswordSheet user={resettingUser} onClose={() => setResettingUser(null)} />
     </>
   );
 }
 
-// ---------------- Permission checklist (shared by invite & editor) ----------------
+// ---------------- Permission checklist (shared by editor) ----------------
 
 function PermissionChecklist({
   catalog,
@@ -209,100 +650,6 @@ function PermissionChecklist({
   );
 }
 
-// ---------------- Invite sheet ----------------
-
-const inviteSchema = z.object({ email: z.string().email('Enter a valid email'), role: z.enum(['ORGANISATION_ADMIN', 'RECRUITER']) });
-
-export function InviteSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const qc = useQueryClient();
-  const { data: catalog } = useCatalog();
-  const canInviteAdmins = !!catalog?.grantable.ORGANISATION_ADMIN.length;
-  const { register, handleSubmit, watch, reset, formState } = useForm<z.infer<typeof inviteSchema>>({
-    resolver: zodResolver(inviteSchema),
-    defaultValues: { role: 'RECRUITER' },
-  });
-  const role = watch('role');
-  const grantable = catalog?.grantable[role] ?? [];
-  const [perms, setPerms] = useState<Set<string>>(new Set());
-  const [link, setLink] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (catalog) setPerms(new Set((catalog.defaults[role] ?? []).filter((k) => grantable.includes(k))));
-  }, [catalog, role]);
-
-  const invite = useMutation({
-    mutationFn: (v: z.infer<typeof inviteSchema>) => api.post<{ inviteUrl?: string }>('/org/invitations', { ...v, permissions: [...perms] }),
-    onSuccess: (res, v) => {
-      toast.success(`Invitation sent to ${v.email}`);
-      qc.invalidateQueries({ queryKey: qk.invitations.all });
-      if (res.inviteUrl) setLink(res.inviteUrl);
-      else close();
-    },
-    onError: (e) => toast.error(errorMessage(e)),
-  });
-
-  const close = () => {
-    reset({ email: '', role: 'RECRUITER' });
-    setLink(null);
-    onClose();
-  };
-
-  return (
-    <Sheet
-      open={open}
-      onClose={close}
-      title="Invite a member"
-      wide
-      footer={
-        link ? (
-          <Button onClick={close}>Done</Button>
-        ) : (
-          <>
-            <Button variant="secondary" onClick={close}>
-              Cancel
-            </Button>
-            <Button loading={invite.isPending} onClick={handleSubmit((v) => invite.mutate(v))}>
-              Send invitation
-            </Button>
-          </>
-        )
-      }
-    >
-      {link ? (
-        <div className="space-y-3 text-sm">
-          <p className="text-slate-600">Invitation created. Email delivery is not configured in this environment, so share this one-time link:</p>
-          <div className="flex gap-2">
-            <Input readOnly value={link} onFocus={(e) => e.target.select()} />
-            <Button variant="secondary" icon={Copy} onClick={() => navigator.clipboard.writeText(link).then(() => toast.success('Link copied'))}>
-              Copy
-            </Button>
-          </div>
-        </div>
-      ) : !catalog ? (
-        <PageSkeleton />
-      ) : (
-        <form className="space-y-5" onSubmit={(e) => e.preventDefault()}>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Email" error={formState.errors.email?.message}>
-              <Input type="email" autoFocus {...register('email')} />
-            </Field>
-            <Field label="Role">
-              <Select {...register('role')}>
-                <option value="RECRUITER">Recruiter</option>
-                {canInviteAdmins && <option value="ORGANISATION_ADMIN">Organisation admin</option>}
-              </Select>
-            </Field>
-          </div>
-          <div>
-            <p className="mb-2 text-sm font-medium text-slate-700">Permissions</p>
-            <PermissionChecklist catalog={catalog} role={role} value={perms} onChange={setPerms} grantable={grantable} />
-          </div>
-        </form>
-      )}
-    </Sheet>
-  );
-}
-
 // ---------------- Member detail ----------------
 
 interface MemberDetail {
@@ -330,6 +677,8 @@ export function MemberDetailPage() {
   const { data: m, isLoading } = useQuery({ queryKey: qk.members.detail(id), queryFn: () => api.get<MemberDetail>(`/org/members/${id}`) });
   const [perms, setPerms] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState<null | 'suspend' | 'reactivate' | 'remove'>(null);
+  const [resettingPassword, setResettingPassword] = useState(false);
+
   useEffect(() => m && setPerms(new Set(m.permissions)), [m?.permissions]);
 
   const dirty = m && (perms.size !== m.permissions.length || m.permissions.some((p) => !perms.has(p)));
@@ -368,6 +717,8 @@ export function MemberDetailPage() {
 
   if (isLoading || !m || !catalog) return <PageSkeleton />;
 
+  const grantable = catalog.grantable[m.role as 'ORGANISATION_ADMIN' | 'RECRUITER'] ?? [];
+
   return (
     <>
       <PageHeader
@@ -380,7 +731,10 @@ export function MemberDetailPage() {
         subtitle={`${ROLE_LABEL[m.role]} · ${m.email}`}
         actions={
           m.canManage && (
-            <>
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" icon={KeyRound} onClick={() => setResettingPassword(true)}>
+                Reset Password
+              </Button>
               {m.status === 'ACTIVE' && (
                 <Button variant="secondary" onClick={() => setConfirm('suspend')}>
                   Suspend
@@ -396,7 +750,7 @@ export function MemberDetailPage() {
                   Remove
                 </Button>
               )}
-            </>
+            </div>
           )
         }
       />
@@ -422,30 +776,32 @@ export function MemberDetailPage() {
                 ))}
               </ul>
             ) : (
-              <EmptyState title="No activity yet" />
+              <p className="p-5 text-sm text-slate-400">No activity logged yet.</p>
             )}
           </Card>
         </div>
-        <Card className="lg:col-span-2">
-          <CardHeader
-            title="Permissions"
-            subtitle={m.canManage ? 'Greyed-out items are outside what you can grant.' : 'You can view but not change these permissions.'}
-            action={
-              m.canManage && (
-                <Button size="sm" disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>
+
+        <div className="lg:col-span-2">
+          <Card className="p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-slate-800">Permissions</h3>
+                <p className="text-xs text-slate-500">Effective permissions based on role ceiling and individual assignments.</p>
+              </div>
+              {dirty && (
+                <Button loading={save.isPending} onClick={() => save.mutate()}>
                   Save changes
                 </Button>
-              )
-            }
-          />
-          <div className="p-5">
-            <PermissionChecklist catalog={catalog} role={m.role} value={perms} onChange={setPerms} grantable={m.canManage ? m.grantable : []} />
-          </div>
-        </Card>
+              )}
+            </div>
+            <PermissionChecklist catalog={catalog} role={m.role} value={perms} onChange={setPerms} grantable={grantable} />
+          </Card>
+        </div>
       </div>
+
       <ConfirmDialog
         open={!!confirm}
-        title={confirm === 'remove' ? `Remove ${m.name}?` : confirm === 'suspend' ? `Suspend ${m.name}?` : `Reactivate ${m.name}?`}
+        title={confirm === 'remove' ? 'Remove member?' : confirm === 'suspend' ? 'Suspend member?' : 'Reactivate member?'}
         message={
           confirm === 'remove'
             ? 'They lose access immediately. Their unused tokens return to the pool. Their history stays in the audit log.'
@@ -456,107 +812,14 @@ export function MemberDetailPage() {
         tone={confirm === 'reactivate' ? 'primary' : 'danger'}
         confirmLabel={label(confirm ?? '')}
         loading={status.isPending}
-        onConfirm={() => status.mutate(confirm)}
+        onConfirm={() => status.mutate(confirm!)}
         onClose={() => setConfirm(null)}
       />
-    </>
-  );
-}
 
-// ---------------- Invitations ----------------
-
-interface InvitationRow {
-  id: string;
-  email: string;
-  role: string;
-  status: string;
-  expiresAt: string;
-  createdAt: string;
-  invitedBy: string;
-  canManage: boolean;
-}
-
-export function InvitationsPage() {
-  const qc = useQueryClient();
-  const [params, setParams] = useSearchParams();
-  const [status, setStatus] = useState('PENDING');
-  const [page, setPage] = useState(1);
-  const [inviting, setInviting] = useState(params.get('new') === '1');
-  const filters = { status, page };
-  const { data, isFetching } = useQuery({
-    queryKey: qk.invitations.list(filters),
-    queryFn: () => api.page<InvitationRow>('/org/invitations', { ...filters, limit: 20 }),
-    placeholderData: keepPreviousData,
-  });
-  const act = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: 'resend' | 'cancel' }) => api.post<{ inviteUrl?: string }>(`/org/invitations/${id}/${action}`),
-    onSuccess: (res, v) => {
-      if (v.action === 'resend' && res.inviteUrl) {
-        navigator.clipboard?.writeText(res.inviteUrl).catch(() => undefined);
-        toast.success('Invitation resent — new link copied to clipboard');
-      } else toast.success(v.action === 'resend' ? 'Invitation resent' : 'Invitation cancelled');
-      qc.invalidateQueries({ queryKey: qk.invitations.all });
-    },
-    onError: (e) => toast.error(errorMessage(e)),
-  });
-
-  return (
-    <>
-      <PageHeader
-        title="Invitations"
-        subtitle="Links expire after 7 days. Resending creates a new link and invalidates the old one."
-        actions={
-          <Button icon={UserPlus} onClick={() => setInviting(true)}>
-            Invite member
-          </Button>
-        }
+      <ResetPasswordSheet
+        user={resettingPassword ? { id: m.id, name: m.name, email: m.email } : null}
+        onClose={() => setResettingPassword(false)}
       />
-      <DataTable
-        loading={isFetching && !data}
-        rows={data?.data}
-        meta={data?.meta}
-        onPage={setPage}
-        toolbar={
-          <FilterChips
-            value={status}
-            onChange={(v) => { setStatus(v); setPage(1); }}
-            options={[
-              { value: 'PENDING', label: 'Pending' },
-              { value: 'ACCEPTED', label: 'Accepted' },
-              { value: 'EXPIRED', label: 'Expired' },
-              { value: 'CANCELLED', label: 'Cancelled' },
-              { value: '', label: 'All' },
-            ]}
-          />
-        }
-        empty={<EmptyState icon={Mail} title="No invitations" text="Invite admins and recruiters to join your workspace." />}
-        columns={[
-          { key: 'email', header: 'Email', cell: (r) => <span className="font-medium text-slate-800">{r.email}</span> },
-          { key: 'role', header: 'Role', cell: (r) => ROLE_LABEL[r.role] ?? label(r.role) },
-          { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status} /> },
-          { key: 'by', header: 'Invited by', hideOnMobile: true, cell: (r) => r.invitedBy },
-          { key: 'exp', header: 'Expires', hideOnMobile: true, cell: (r) => fmtDate(r.expiresAt) },
-          {
-            key: 'actions',
-            header: '',
-            className: 'text-right',
-            cell: (r) =>
-              r.canManage && (r.status === 'PENDING' || r.status === 'EXPIRED') ? (
-                <div className="flex justify-end gap-1">
-                  <Button size="sm" variant="ghost" icon={RotateCw} onClick={() => act.mutate({ id: r.id, action: 'resend' })}>
-                    Resend
-                  </Button>
-                  {r.status === 'PENDING' && (
-                    <Button size="sm" variant="ghost" icon={XCircle} onClick={() => act.mutate({ id: r.id, action: 'cancel' })}>
-                      Cancel
-                    </Button>
-                  )}
-                </div>
-              ) : null,
-          },
-        ]}
-      />
-      <InviteSheet open={inviting} onClose={() => { setInviting(false); setParams({}); }} />
     </>
   );
 }

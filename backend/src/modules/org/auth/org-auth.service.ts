@@ -216,7 +216,8 @@ export class OrgAuthService {
         slug: org.slug,
         status: org.status,
         tier: org.tier,
-        maxRecruiters: org.maxRecruiters,
+        recruiterLimit: org.recruiterLimit,
+        maxRecruiters: org.recruiterLimit,
         logoUrl: org.metadata?.logoUrl ?? null,
       },
       permissions: ctx.permissions,
@@ -257,7 +258,7 @@ export class OrgAuthService {
       const recruiters = await this.prisma.orgMemberProfile.count({
         where: { organisationId: org.id, status: 'ACTIVE', user: { role: UserRole.RECRUITER } },
       });
-      if (recruiters >= org.maxRecruiters) {
+      if (recruiters >= org.recruiterLimit) {
         throw new BadRequestException('Your organisation has reached its recruiter seat limit');
       }
     }

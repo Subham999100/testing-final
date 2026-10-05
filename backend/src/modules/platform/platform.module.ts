@@ -17,6 +17,8 @@ import { PlatformAnalyticsController } from './analytics/platform-analytics.cont
 import { PlatformAuditController } from './audit/platform-audit.controller';
 import { PlatformSecurityController } from './security/platform-security.controller';
 import { PlatformSettingsController } from './settings/platform-settings.controller';
+import { PlatformSupportController } from './support/platform-support.controller';
+import { PlatformReportsController } from './reports/platform-reports.controller';
 
 // Services
 import { PlatformAuthService } from './auth/platform-auth.service';
@@ -27,6 +29,8 @@ import { PlatformTokenService } from './tokens/platform-token.service';
 import { PlatformAnalyticsService } from './analytics/platform-analytics.service';
 import { PlatformSecurityService } from './security/platform-security.service';
 import { PlatformSettingsService } from './settings/platform-settings.service';
+import { PlatformSupportService } from './support/platform-support.service';
+import { PlatformReportsService } from './reports/platform-reports.service';
 
 // Guards
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -67,6 +71,8 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
     PlatformAuditController,
     PlatformSecurityController,
     PlatformSettingsController,
+    PlatformSupportController,
+    PlatformReportsController,
   ],
   providers: [
     PlatformAuthService,
@@ -77,6 +83,8 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
     PlatformAnalyticsService,
     PlatformSecurityService,
     PlatformSettingsService,
+    PlatformSupportService,
+    PlatformReportsService,
     JwtAuthGuard,
     RolesGuard,
     PermissionsGuard,
@@ -86,6 +94,8 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
     PlatformOrganisationService,
     PlatformAdminService,
     PlatformTokenService,
+    PlatformSupportService,
+    PlatformReportsService,
   ],
 })
 export class PlatformModule {}

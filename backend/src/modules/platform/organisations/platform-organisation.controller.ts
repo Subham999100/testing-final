@@ -29,6 +29,7 @@ import { CreateOrganisationDto } from './dto/create-organisation.dto';
 import { UpdateOrganisationDto } from './dto/update-organisation.dto';
 import { SuspendOrganisationDto } from './dto/suspend-organisation.dto';
 import { QueryOrganisationDto } from './dto/query-organisation.dto';
+import { TransferSuperAdminDto } from './dto/transfer-super-admin.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { PermissionsGuard } from '../../../common/guards/permissions.guard';
@@ -122,6 +123,20 @@ export class PlatformOrganisationController {
     const ipAddress = (req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress) as string;
     const userAgent = req.headers['user-agent'];
     return this.organisationService.resetSuperAdminPassword(id, actor, ipAddress, userAgent);
+  }
+
+  @Post(':id/super-admin/transfer')
+  @RequirePermissions(PlatformPermissions.ORGANISATIONS_UPDATE)
+  @HttpCode(HttpStatus.OK)
+  async transferSuperAdmin(
+    @Param('id') id: string,
+    @Body() dto: TransferSuperAdminDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Req() req: Request,
+  ) {
+    const ipAddress = (req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress) as string;
+    const userAgent = req.headers['user-agent'];
+    return this.organisationService.transferSuperAdminCredentials(id, dto, actor, ipAddress, userAgent);
   }
 
   @Delete(':id')

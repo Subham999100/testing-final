@@ -49,7 +49,7 @@ describe('Organisation portal (e2e)', () => {
         slug: `e2e-${slug}-${run}`,
         contactEmail: `${slug}-${run}@e2e.test`,
         status: 'ACTIVE',
-        maxRecruiters: 5,
+        recruiterLimit: 5,
         tokenBalance: { create: { balance, allocatedTokens: balance } },
       },
     });

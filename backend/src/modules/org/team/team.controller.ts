@@ -15,7 +15,14 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { PlatformPermissions } from '../../../common/constants/permissions.constant';
 import { Org, OrgContext, OrgGuard, OrgPerms } from '../common/org-context';
-import { CreateInvitationDto, InvitationQueryDto, MemberQueryDto, OwnerInvitationDto, UpdatePermissionsDto } from './dto';
+import {
+  CreateAdminDto,
+  CreateRecruiterDto,
+  MemberQueryDto,
+  OwnerInvitationDto,
+  ResetMemberPasswordDto,
+  UpdatePermissionsDto,
+} from './dto';
 import { TeamService } from './team.service';
 
 @ApiTags('Org · Members')
@@ -34,6 +41,36 @@ export class OrgMembersController {
   @Get('members/options')
   options(@Org() ctx: OrgContext) {
     return this.team.memberOptions(ctx);
+  }
+
+  @Get('admins')
+  @OrgPerms('members.read')
+  getAdmin(@Org() ctx: OrgContext) {
+    return this.team.getAdmin(ctx);
+  }
+
+  @Post('admins')
+  @OrgPerms('org_admins.manage')
+  createAdmin(@Org() ctx: OrgContext, @Body() dto: CreateAdminDto) {
+    return this.team.createAdmin(ctx, dto);
+  }
+
+  @Get('recruiters')
+  @OrgPerms('members.read')
+  listRecruiters(@Org() ctx: OrgContext, @Query() q: MemberQueryDto) {
+    return this.team.listMembers(ctx, { ...q, role: 'RECRUITER' });
+  }
+
+  @Get('recruiters/usage')
+  @OrgPerms('members.read')
+  recruiterUsage(@Org() ctx: OrgContext) {
+    return this.team.getRecruiterUsage(ctx);
+  }
+
+  @Post('recruiters')
+  @OrgPerms('recruiters.manage')
+  createRecruiter(@Org() ctx: OrgContext, @Body() dto: CreateRecruiterDto) {
+    return this.team.createRecruiter(ctx, dto);
   }
 
   @Get('members/:id')
@@ -62,6 +99,13 @@ export class OrgMembersController {
     return this.team.reactivate(ctx, id);
   }
 
+  @Post('members/:id/reset-password')
+  @HttpCode(HttpStatus.OK)
+  @OrgPerms('recruiters.manage', 'org_admins.manage')
+  resetPassword(@Org() ctx: OrgContext, @Param('id') id: string, @Body() dto: ResetMemberPasswordDto) {
+    return this.team.resetMemberPassword(ctx, id, dto);
+  }
+
   @Delete('members/:id')
   @OrgPerms('recruiters.manage', 'org_admins.manage')
   remove(@Org() ctx: OrgContext, @Param('id') id: string) {
@@ -71,32 +115,6 @@ export class OrgMembersController {
   @Get('permissions/catalog')
   catalog(@Org() ctx: OrgContext) {
     return this.team.permissionCatalog(ctx);
-  }
-
-  @Get('invitations')
-  @OrgPerms('invitations.manage')
-  invitations(@Org() ctx: OrgContext, @Query() q: InvitationQueryDto) {
-    return this.team.listInvitations(ctx, q);
-  }
-
-  @Post('invitations')
-  @OrgPerms('invitations.manage')
-  invite(@Org() ctx: OrgContext, @Body() dto: CreateInvitationDto) {
-    return this.team.createInvitation(ctx, dto);
-  }
-
-  @Post('invitations/:id/resend')
-  @HttpCode(HttpStatus.OK)
-  @OrgPerms('invitations.manage')
-  resend(@Org() ctx: OrgContext, @Param('id') id: string) {
-    return this.team.resendInvitation(ctx, id);
-  }
-
-  @Post('invitations/:id/cancel')
-  @HttpCode(HttpStatus.OK)
-  @OrgPerms('invitations.manage')
-  cancel(@Org() ctx: OrgContext, @Param('id') id: string) {
-    return this.team.cancelInvitation(ctx, id);
   }
 }
 

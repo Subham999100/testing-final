@@ -14,6 +14,10 @@ import {
   AuditLogItem,
   SecurityEvent,
   PlatformSetting,
+  SupportTicket,
+  SupportMessage,
+  SupportTicketsResponse,
+  ReportsOverview,
 } from '../types/platform.types';
 export const PlatformService = {
   async read(path: string, params?: Record<string, unknown>): Promise<any> {
@@ -84,6 +88,21 @@ export const PlatformService = {
   async activateOrganisation(id: string): Promise<Organisation> {
     try {
       const res: any = await apiClient.post(`/platform/organisations/${id}/activate`);
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
+  },
+
+  async transferSuperAdmin(
+    orgId: string,
+    payload: { newEmail: string; newPassword: string; confirmPassword: string },
+  ) {
+    try {
+      const res: any = await apiClient.post(
+        `/platform/organisations/${orgId}/super-admin/transfer`,
+        payload,
+      );
       return res.data || res;
     } catch (failure) {
       throw failure;
@@ -228,6 +247,160 @@ export const PlatformService = {
     try {
       const res: any = await apiClient.get('/platform/monitoring');
       return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
+  },
+
+  // ------------------------------------------------------------
+  // SUPPORT OPERATIONS
+  // ------------------------------------------------------------
+  async getSupportTickets(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: string;
+    priority?: string;
+    category?: string;
+    organisationId?: string;
+    assignedToUserId?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<SupportTicketsResponse> {
+    try {
+      const res: any = await apiClient.get('/platform/support', { params });
+      return res.meta ? res : (res.data || res);
+    } catch (failure) {
+      throw failure;
+    }
+  },
+
+  async getSupportTicketById(id: string): Promise<SupportTicket> {
+    try {
+      const res: any = await apiClient.get(`/platform/support/${id}`);
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
+  },
+
+  async createSupportTicket(data: {
+    subject: string;
+    description: string;
+    organisationId?: string;
+    priority?: string;
+    category?: string;
+    assignedToUserId?: string;
+  }): Promise<SupportTicket> {
+    try {
+      const res: any = await apiClient.post('/platform/support', data);
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
+  },
+
+  async addSupportMessage(
+    ticketId: string,
+    data: { body: string; isInternal?: boolean },
+  ): Promise<SupportMessage> {
+    try {
+      const res: any = await apiClient.post(`/platform/support/${ticketId}/messages`, data);
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
+  },
+
+  async updateSupportTicket(
+    ticketId: string,
+    data: { subject?: string; description?: string; priority?: string; category?: string },
+  ): Promise<SupportTicket> {
+    try {
+      const res: any = await apiClient.patch(`/platform/support/${ticketId}`, data);
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
+  },
+
+  async updateSupportTicketStatus(
+    ticketId: string,
+    data: { status: string; resolutionNotes?: string },
+  ): Promise<SupportTicket> {
+    try {
+      const res: any = await apiClient.patch(`/platform/support/${ticketId}/status`, data);
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
+  },
+
+  async assignSupportTicket(
+    ticketId: string,
+    data: { assignedToUserId: string | null },
+  ): Promise<SupportTicket> {
+    try {
+      const res: any = await apiClient.patch(`/platform/support/${ticketId}/assignment`, data);
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
+  },
+
+  // ------------------------------------------------------------
+  // REPORTS & ANALYTICS
+  // ------------------------------------------------------------
+  async getReportsOverview(params?: {
+    timeframe?: string;
+    startDate?: string;
+    endDate?: string;
+    organisationId?: string;
+  }): Promise<ReportsOverview> {
+    try {
+      const res: any = await apiClient.get('/platform/reports/overview', { params });
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
+  },
+
+  async exportReportsCsv(params?: {
+    timeframe?: string;
+    startDate?: string;
+    endDate?: string;
+    organisationId?: string;
+    type?: 'overview' | 'organisations' | 'jobs' | 'applications';
+  }): Promise<void> {
+    try {
+      const token = sessionStorage.getItem('clyptus_platform_token');
+      const urlParams = new URLSearchParams();
+      if (params?.timeframe) urlParams.append('timeframe', params.timeframe);
+      if (params?.startDate) urlParams.append('startDate', params.startDate);
+      if (params?.endDate) urlParams.append('endDate', params.endDate);
+      if (params?.organisationId) urlParams.append('organisationId', params.organisationId);
+      if (params?.type) urlParams.append('type', params.type);
+
+      const baseURL = import.meta.env.VITE_API_URL || '/api/v1';
+      const response = await fetch(`${baseURL}/platform/reports/export?${urlParams.toString()}`, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : '',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Export failed with HTTP ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `clyptus-${params?.type || 'report'}-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
     } catch (failure) {
       throw failure;
     }

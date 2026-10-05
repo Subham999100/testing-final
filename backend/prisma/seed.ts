@@ -147,7 +147,7 @@ async function main() {
       contactPhone: '+1-555-0199',
       status: OrganisationStatus.ACTIVE,
       tier: 'ENTERPRISE',
-      maxRecruiters: 20,
+      recruiterLimit: 20,
       metadata: {
         create: {
           industry: 'Information Technology',

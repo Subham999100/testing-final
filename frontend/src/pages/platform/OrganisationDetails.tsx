@@ -63,17 +63,18 @@ export function OrganisationDetails() {
             path={`organisations/${id}`}
             method="patch"
             fields={[
-              'name',
-              'contactEmail',
-              'domain',
-              'contactPhone',
-              'tier',
-            ].map((name) => ({
-              name,
-              type: name === 'contactEmail' ? 'email' : 'text',
-              value: org[name] ?? org.metadata?.[name],
-              required: ['name', 'contactEmail'].includes(name),
-            }))}
+              { name: 'name', type: 'text', value: org.name, required: true },
+              { name: 'contactEmail', type: 'email', value: org.contactEmail, required: true },
+              { name: 'domain', type: 'text', value: org.domain ?? '' },
+              { name: 'contactPhone', type: 'text', value: org.contactPhone ?? '' },
+              { name: 'tier', type: 'text', value: org.tier },
+              {
+                name: 'recruiterLimit',
+                type: 'number',
+                value: org.recruiterLimit ?? org.maxRecruiters ?? 25,
+                min: 1,
+              },
+            ]}
           />
         )}{' '}
         {can('platform.organisations.suspend') && org.status === 'ACTIVE' && (
@@ -92,7 +93,9 @@ export function OrganisationDetails() {
       <Metrics
         values={{
           members: org.membersCount ?? 0,
-          maxRecruiters: org.maxRecruiters ?? 0,
+          recruiterLimit: org.recruiterLimit ?? org.maxRecruiters ?? 25,
+          recruitersUsed: org.recruitersUsed ?? 0,
+          available: org.recruitersAvailable ?? Math.max(0, (org.recruiterLimit ?? org.maxRecruiters ?? 25) - (org.recruitersUsed ?? 0)),
           ...(can('platform.tokens.read') && org.tokenBalance != null
             ? {
                 tokenBalance:
@@ -111,6 +114,9 @@ export function OrganisationDetails() {
           <span>Slug</span><span className="text-ink font-mono">{org.slug}</span>
           <span>Domain</span><span className="text-ink">{org.domain || '—'}</span>
           <span>Tier</span><span className="text-ink">{org.tier}</span>
+          <span>Recruiter Limit</span><span className="text-ink">{org.recruiterLimit ?? org.maxRecruiters ?? 25}</span>
+          <span>Recruiters Used</span><span className="text-ink">{org.recruitersUsed ?? 0}</span>
+          <span>Recruiters Available</span><span className="text-ink">{org.recruitersAvailable ?? Math.max(0, (org.recruiterLimit ?? org.maxRecruiters ?? 25) - (org.recruitersUsed ?? 0))}</span>
           <span>Status</span><span className="text-ink">{org.status}</span>
           <span>Contact</span><span className="text-ink">{org.contactEmail}</span>
           {org.contactPhone && <><span>Phone</span><span className="text-ink">{org.contactPhone}</span></>}

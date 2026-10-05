@@ -22,6 +22,7 @@ import {
   Sparkles,
   Users,
   UserSearch,
+  LifeBuoy,
 } from 'lucide-react';
 
 /** Lazy page chunks — shared by React.lazy and sidebar hover prefetch. */
@@ -38,6 +39,7 @@ export const loaders = {
   insights: () => import('../pages/insights'),
   engagement: () => import('../pages/engagement'),
   settings: () => import('../pages/settings'),
+  support: () => import('../pages/support'),
 };
 
 export type Chunk = keyof typeof loaders;
@@ -73,7 +75,6 @@ export const NAV: NavSection[] = [
     title: 'Team',
     items: [
       { label: 'Members', path: '/org/members', icon: Users, perms: ['members.read'], chunk: 'team' },
-      { label: 'Invitations', path: '/org/invitations', icon: Mail, perms: ['invitations.manage'], chunk: 'team' },
     ],
   },
   {
@@ -96,6 +97,12 @@ export const NAV: NavSection[] = [
     items: [
       { label: 'Security', path: '/org/security', icon: ShieldCheck, perms: ['org.security.manage'], chunk: 'insights' },
       { label: 'Organisation', path: '/org/organisation', icon: Building2, perms: ['org.profile.read'], chunk: 'settings' },
+    ],
+  },
+  {
+    title: 'Help',
+    items: [
+      { label: 'Support', path: '/org/support', icon: LifeBuoy, perms: ['support.read'], chunk: 'support' },
     ],
   },
 ];

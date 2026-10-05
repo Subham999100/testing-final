@@ -38,6 +38,8 @@ import { EngagementService } from './workspace/engagement.service';
 import { InsightsService } from './workspace/insights.service';
 import { OrgWorkspaceController } from './workspace/workspace.controller';
 import { WorkspaceService } from './workspace/workspace.service';
+import { OrgSupportController } from './support/org-support.controller';
+import { OrgSupportService } from './support/org-support.service';
 
 @Module({
   imports: [
@@ -66,6 +68,7 @@ import { WorkspaceService } from './workspace/workspace.service';
     OrgBillingController,
     OrgAiController,
     OrgWorkspaceController,
+    OrgSupportController,
   ],
   providers: [
     JwtAuthGuard,
@@ -87,6 +90,10 @@ import { WorkspaceService } from './workspace/workspace.service';
     WorkspaceService,
     EngagementService,
     InsightsService,
+    OrgSupportService,
+  ],
+  exports: [
+    OrgSupportService,
   ],
 })
 export class OrgModule {}

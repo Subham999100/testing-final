@@ -62,7 +62,29 @@ export const api = {
     a.click();
     setTimeout(() => URL.revokeObjectURL(href), 1000);
   },
+  async supportList(params?: Params): Promise<OrgSupportTicketsResponse> {
+    const res = (await apiClient.get('/org/support', { params: clean(params) })) as any;
+    return {
+      data: res.data ?? [],
+      meta: res.meta ?? { page: 1, limit: 15, total: res.data?.length ?? 0, totalPages: 1 },
+      summary: res.summary ?? { open: 0, inProgress: 0, resolved: 0 },
+    };
+  },
+  async supportGet(id: string): Promise<OrgSupportTicket> {
+    const res = (await apiClient.get(`/org/support/${id}`)) as any;
+    return res.data ?? res;
+  },
+  async supportCreate(body: { subject: string; description: string; priority?: string; category?: string }): Promise<OrgSupportTicket> {
+    const res = (await apiClient.post('/org/support', body)) as any;
+    return res.data ?? res;
+  },
+  async supportMessage(id: string, body: { body: string }): Promise<OrgSupportMessage> {
+    const res = (await apiClient.post(`/org/support/${id}/messages`, body)) as any;
+    return res.data ?? res;
+  },
 };
+
+export const orgApi = api;
 
 export function errorMessage(err: unknown, fallback = 'Something went wrong'): string {
   const e = err as ApiError;
@@ -105,4 +127,52 @@ export interface UserRef {
   id: string;
   name: string;
   email?: string;
+}
+
+export interface OrgSupportMessage {
+  id: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+  author: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+  };
+}
+
+export interface OrgSupportTicket {
+  id: string;
+  ticketNumber: number;
+  subject: string;
+  description: string;
+  status: string;
+  priority: string;
+  category: string;
+  resolutionNotes?: string | null;
+  resolvedAt?: string | null;
+  closedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messageCount?: number;
+  createdByUser?: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+  };
+  messages?: OrgSupportMessage[];
+}
+
+export interface OrgSupportTicketsResponse {
+  data: OrgSupportTicket[];
+  meta: PageMeta;
+  summary: {
+    open: number;
+    inProgress: number;
+    resolved: number;
+  };
 }

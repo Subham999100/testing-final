@@ -21,7 +21,6 @@ const page = (loader: Loader, name: string) =>
 const Dashboard = page(loaders.dashboard, 'DashboardPage');
 const Members = page(loaders.team, 'MembersPage');
 const MemberDetail = page(loaders.team, 'MemberDetailPage');
-const Invitations = page(loaders.team, 'InvitationsPage');
 const Jobs = page(loaders.jobs, 'JobsPage');
 const JobForm = page(loaders.jobs, 'JobFormPage');
 const JobDetail = page(loaders.jobs, 'JobDetailPage');
@@ -46,6 +45,7 @@ const Notifications = page(loaders.engagement, 'NotificationsPage');
 const Tasks = page(loaders.engagement, 'TasksPage');
 const Organisation = page(loaders.settings, 'OrganisationPage');
 const Profile = page(loaders.settings, 'ProfilePage');
+const Support = page(loaders.support, 'SupportPage');
 
 function Forbidden() {
   return (
@@ -122,7 +122,6 @@ export default function OrgPortal() {
         <Route path="offers/:id" element={<Guard perms={['offers.read']}><OfferDetail /></Guard>} />
         <Route path="members" element={<Guard perms={['members.read']}><Members /></Guard>} />
         <Route path="members/:id" element={<Guard perms={['members.read']}><MemberDetail /></Guard>} />
-        <Route path="invitations" element={<Guard perms={['invitations.manage']}><Invitations /></Guard>} />
         <Route path="tokens" element={<Guard perms={['tokens.read']}><Tokens /></Guard>} />
         <Route path="billing" element={<Guard perms={['billing.read', 'tokens.purchase']}><Billing /></Guard>} />
         <Route path="billing/:id" element={<Guard perms={['billing.read', 'tokens.purchase']}><Invoice /></Guard>} />
@@ -135,6 +134,7 @@ export default function OrgPortal() {
         <Route path="tasks" element={<Guard perms={['tasks.use']}><Tasks /></Guard>} />
         <Route path="organisation" element={<Guard perms={['org.profile.read']}><Organisation /></Guard>} />
         <Route path="profile" element={<Guard><Profile /></Guard>} />
+        <Route path="support" element={<Guard perms={['support.read']}><Support /></Guard>} />
         <Route path="*" element={<Navigate to="/org" replace />} />
       </Route>
     </Routes>

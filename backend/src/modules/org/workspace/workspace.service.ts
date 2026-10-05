@@ -67,7 +67,14 @@ export class WorkspaceService {
         logoUrl: org.metadata?.logoUrl ?? null,
         address: org.metadata?.address ?? null,
       },
-      platformLimits: { tier: org.tier, maxRecruiters: org.maxRecruiters, recruitersUsed: recruiters, activeMembers: members },
+      platformLimits: {
+        tier: org.tier,
+        recruiterLimit: org.recruiterLimit,
+        maxRecruiters: org.recruiterLimit,
+        recruitersUsed: recruiters,
+        recruitersAvailable: Math.max(0, org.recruiterLimit - recruiters),
+        activeMembers: members,
+      },
     };
   }
 

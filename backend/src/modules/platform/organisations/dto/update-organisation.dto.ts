@@ -37,6 +37,11 @@ export class UpdateOrganisationDto {
   @IsOptional()
   maxRecruiters?: number;
 
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  recruiterLimit?: number;
+
   @IsString()
   @IsOptional()
   industry?: string;

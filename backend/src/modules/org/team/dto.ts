@@ -48,6 +48,62 @@ export class ChangePasswordDto {
   confirmPassword?: string;
 }
 
+export class CreateAdminDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  name: string;
+
+  @Transform(trimLower)
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(8, { message: 'Password must be at least 8 characters long' })
+  @MaxLength(200)
+  password: string;
+
+  @IsString()
+  @IsNotEmpty()
+  confirmPassword: string;
+}
+
+export class CreateRecruiterDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  name: string;
+
+  @Transform(trimLower)
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(8, { message: 'Password must be at least 8 characters long' })
+  @MaxLength(200)
+  password: string;
+
+  @IsString()
+  @IsNotEmpty()
+  confirmPassword: string;
+}
+
+export class ResetMemberPasswordDto {
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(8, { message: 'Password must be at least 8 characters long' })
+  @MaxLength(200)
+  password: string;
+
+  @IsString()
+  @IsNotEmpty()
+  confirmPassword: string;
+}
+
 export class AcceptInvitationDto {
   @IsString()
   @IsNotEmpty()
