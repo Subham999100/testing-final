@@ -3,21 +3,7 @@
 // and platform provisioning of the first Org Super Admin.
 // ============================================================
 
-import {
-  Body,
-  Controller,
-  Delete,
-  ForbiddenException,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Patch,
-  Post,
-  Put,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
@@ -28,22 +14,14 @@ import { RequirePermissions } from '../../../common/decorators/permissions.decor
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { PlatformPermissions } from '../../../common/constants/permissions.constant';
-import { Org, OrgContext, OrgGuard, OrgPerms, can } from '../common/org-context';
-import { OrgRole } from '../common/org-permissions';
-import {
-  CreateInvitationDto,
-  InvitationQueryDto,
-  MemberQueryDto,
-  OwnerInvitationDto,
-  UpdateMemberRoleDto,
-  UpdatePermissionsDto,
-} from './dto';
+import { Org, OrgContext, OrgGuard, OrgPerms } from '../common/org-context';
+import { CreateInvitationDto, InvitationQueryDto, MemberQueryDto, OwnerInvitationDto, UpdatePermissionsDto } from './dto';
 import { TeamService } from './team.service';
 
 @ApiTags('Org · Members')
 @ApiBearerAuth()
 @Controller('org')
-@UseGuards(JwtAuthGuard, RolesGuard, OrgGuard)
+@UseGuards(JwtAuthGuard, OrgGuard)
 export class OrgMembersController {
   constructor(private readonly team: TeamService) {}
 
@@ -68,12 +46,6 @@ export class OrgMembersController {
   @OrgPerms('recruiters.permissions.manage', 'org_admins.manage')
   updatePermissions(@Org() ctx: OrgContext, @Param('id') id: string, @Body() dto: UpdatePermissionsDto) {
     return this.team.updatePermissions(ctx, id, dto.permissions);
-  }
-
-  @Patch('members/:id/role')
-  @OrgPerms('org_admins.manage')
-  updateRole(@Org() ctx: OrgContext, @Param('id') id: string, @Body() dto: UpdateMemberRoleDto) {
-    return this.team.updateMemberRole(ctx, id, dto.role as OrgRole);
   }
 
   @Post('members/:id/suspend')
@@ -125,80 +97,6 @@ export class OrgMembersController {
   @OrgPerms('invitations.manage')
   cancel(@Org() ctx: OrgContext, @Param('id') id: string) {
     return this.team.cancelInvitation(ctx, id);
-  }
-
-  @Get('super-admin/capabilities')
-  @Roles(UserRole.ORGANISATION_SUPER_ADMIN)
-  superAdminCapabilities(@Org() ctx: OrgContext) {
-    return {
-      organisationId: ctx.organisationId,
-      organisationName: ctx.organisationName,
-      role: ctx.role,
-      fullOrgAccess: true,
-      canPurchaseTokens: true,
-      canManageBilling: true,
-      canManageOrgAdmins: true,
-      canManageRecruiters: true,
-      canManageIntegrations: true,
-      canManageSecurity: true,
-      canUpdateOrgProfile: true,
-      permissions: ctx.permissions,
-    };
-  }
-
-  @Get('admin/capabilities')
-  @Roles(UserRole.ORGANISATION_SUPER_ADMIN, UserRole.ORGANISATION_ADMIN)
-  adminCapabilities(@Org() ctx: OrgContext) {
-    const isSuperAdmin = ctx.role === UserRole.ORGANISATION_SUPER_ADMIN;
-    return {
-      organisationId: ctx.organisationId,
-      organisationName: ctx.organisationName,
-      role: ctx.role,
-      fullOrgAccess: isSuperAdmin,
-      canPurchaseTokens: isSuperAdmin,
-      canManageBilling: isSuperAdmin,
-      canManageOrgAdmins: isSuperAdmin,
-      canManageRecruiters: can(ctx, 'recruiters.manage'),
-      canManageIntegrations: isSuperAdmin,
-      canManageSecurity: isSuperAdmin,
-      canUpdateOrgProfile: isSuperAdmin,
-      permissions: ctx.permissions,
-    };
-  }
-
-  @Get(':orgId/super-admin')
-  @Roles(UserRole.ORGANISATION_SUPER_ADMIN)
-  getSuperAdminData(@Org() ctx: OrgContext, @Param('orgId') orgId: string) {
-    if (orgId !== ctx.organisationId) {
-      throw new ForbiddenException('Access denied: You are not authorized for this organization');
-    }
-    return {
-      organisationId: ctx.organisationId,
-      role: ctx.role,
-      fullOrgAccess: true,
-      canPurchaseTokens: true,
-      canManageBilling: true,
-      canCreateOrgAdmins: true,
-      canManageRecruiters: true,
-    };
-  }
-
-  @Get(':orgId/admin')
-  @Roles(UserRole.ORGANISATION_SUPER_ADMIN, UserRole.ORGANISATION_ADMIN)
-  getAdminData(@Org() ctx: OrgContext, @Param('orgId') orgId: string) {
-    if (orgId !== ctx.organisationId) {
-      throw new ForbiddenException('Access denied: You are not authorized for this organization');
-    }
-    const isSuperAdmin = ctx.role === UserRole.ORGANISATION_SUPER_ADMIN;
-    return {
-      organisationId: ctx.organisationId,
-      role: ctx.role,
-      canManageRecruiters: can(ctx, 'recruiters.manage'),
-      canManageJobs: can(ctx, 'jobs.create'),
-      canAllocateTokens: can(ctx, 'tokens.allocate'),
-      canPurchaseTokens: isSuperAdmin,
-      canManageBilling: isSuperAdmin,
-    };
   }
 }
 

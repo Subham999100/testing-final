@@ -78,7 +78,7 @@ export async function resolveOrgContext(
     where: { id: profile.organisationId },
     select: { id: true, name: true, status: true },
   });
-  if (!org || org.status !== OrganisationStatus.ACTIVE) {
+  if (!org || org.status === OrganisationStatus.SUSPENDED || org.status === OrganisationStatus.ARCHIVED) {
     throw new ForbiddenException('Your organisation is not active. Contact platform support.');
   }
   return {
@@ -112,12 +112,6 @@ export class OrgGuard implements CanActivate {
     const ua = req.headers['user-agent'];
     orgContext.userAgent = typeof ua === 'string' ? ua : undefined;
     req.orgContext = orgContext;
-
-    // Cross-tenant protection: if a route parameter defines organisationId/orgId, it must match the authenticated session
-    const paramOrgId = req.params?.organisationId || req.params?.orgId;
-    if (paramOrgId && paramOrgId !== orgContext.organisationId) {
-      throw new ForbiddenException('Access denied: You are not authorized for this organization');
-    }
 
     // Password change requirement enforcement:
     // When mustChangePassword is true, only routes marked with @AllowPasswordChange() may be accessed.
