@@ -63,7 +63,8 @@ interface MemberEntry {
 type TokenTab = 'allocations' | 'ledger' | 'usage' | 'mine';
 
 export function TokensPage() {
-  const { can } = usePermissions();
+  const { can, role } = usePermissions();
+  const isSuperAdmin = role === 'ORGANISATION_SUPER_ADMIN';
   const { data: wallet, isLoading } = useWallet();
   const admin = can('tokens.allocate');
   const [tab, setTab] = useState<TokenTab>(admin ? 'allocations' : 'mine');
@@ -94,18 +95,22 @@ export function TokensPage() {
   return (
     <>
       <PageHeader
-        title="Tokens"
-        subtitle="Tokens pay for publishing jobs, unlocking resumes and AI features."
+        title={isSuperAdmin ? 'Credits Allocation' : 'Tokens'}
+        subtitle={
+          isSuperAdmin
+            ? 'Manage organisation credits, member allocations, and credit ledger.'
+            : 'Tokens pay for publishing jobs, unlocking resumes and AI features.'
+        }
         actions={
           can('tokens.purchase') && (
             <Link to="/org/billing">
-              <Button icon={CreditCard}>Buy tokens</Button>
+              <Button icon={CreditCard}>{isSuperAdmin ? 'Billing & purchases' : 'Buy tokens'}</Button>
             </Link>
           )
         }
       />
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {wallet.myAllocation ? (
+        {wallet.myAllocation && !isSuperAdmin ? (
           <>
             <KpiCard label="My tokens left" value={fmtNum(wallet.myAllocation.remaining)} icon={Coins} tone="amber" />
             <KpiCard label="Allocated to me" value={fmtNum(wallet.myAllocation.allocated)} tone="indigo" />
@@ -114,10 +119,25 @@ export function TokensPage() {
           </>
         ) : (
           <>
-            <KpiCard label="Balance" value={fmtNum(wallet.balance)} hint={wallet.balance < wallet.lowBalanceThreshold ? 'Running low' : undefined} icon={Coins} tone="amber" />
-            <KpiCard label="Unallocated (yours to spend)" value={fmtNum(wallet.unallocated)} tone="emerald" />
+            <KpiCard
+              label={isSuperAdmin ? 'Available credits' : 'Balance'}
+              value={fmtNum(wallet.balance)}
+              hint={wallet.balance < wallet.lowBalanceThreshold ? 'Running low' : undefined}
+              icon={Coins}
+              tone="amber"
+            />
+            <KpiCard
+              label={isSuperAdmin ? 'Unallocated credits' : 'Unallocated (yours to spend)'}
+              value={fmtNum(wallet.unallocated)}
+              tone="emerald"
+            />
             <KpiCard label="Allocated to members" value={fmtNum(wallet.allocatedToMembers)} tone="indigo" />
-            <KpiCard label="Used to date" value={fmtNum(wallet.consumed)} hint={`${fmtNum(wallet.lifetimeReceived)} received in total`} tone="violet" />
+            <KpiCard
+              label={isSuperAdmin ? 'Total credits consumed' : 'Used to date'}
+              value={fmtNum(wallet.consumed)}
+              hint={`${fmtNum(wallet.lifetimeReceived)} received in total`}
+              tone="violet"
+            />
           </>
         )}
       </div>
@@ -137,9 +157,9 @@ export function TokensPage() {
         value={tab}
         onChange={(t) => { setTab(t); setPage(1); }}
         tabs={[
-          ...(admin ? [{ key: 'allocations' as const, label: 'Allocations' }] : []),
-          ...(can('tokens.allocate', 'tokens.purchase') ? [{ key: 'ledger' as const, label: 'Organisation ledger' }, { key: 'usage' as const, label: 'Usage' }] : []),
-          { key: 'mine', label: 'My activity' },
+          ...(admin ? [{ key: 'allocations' as const, label: isSuperAdmin ? 'Member allocations' : 'Allocations' }] : []),
+          ...(can('tokens.allocate', 'tokens.purchase') ? [{ key: 'ledger' as const, label: 'Organisation ledger' }, { key: 'usage' as const, label: 'Usage breakdown' }] : []),
+          ...(!isSuperAdmin ? [{ key: 'mine' as const, label: 'My activity' }] : []),
         ]}
       />
 
