@@ -23,9 +23,14 @@ vi.mock('../../services/platform.service', () => ({
   },
 }));
 
+let mockUser = {
+  userId: 'admin-1',
+  role: 'PLATFORM_ADMIN',
+  permissions: ['platform.support.read', 'platform.support.manage'],
+};
+
 vi.mock('../../store/auth.store', () => ({
-  useAuthStore: (selector: any) =>
-    selector({ user: { userId: 'admin-1', role: 'PLATFORM_SUPER_ADMIN' } }),
+  useAuthStore: (selector: any) => selector({ user: mockUser }),
 }));
 
 describe('Platform Support Page', () => {
@@ -62,6 +67,12 @@ describe('Platform Support Page', () => {
       defaultOptions: { queries: { retry: false } },
     });
     vi.clearAllMocks();
+
+    mockUser = {
+      userId: 'admin-1',
+      role: 'PLATFORM_ADMIN',
+      permissions: ['platform.support.read', 'platform.support.manage'],
+    };
 
     (PlatformService.getSupportTickets as any).mockResolvedValue({
       data: [sampleTicket],
@@ -112,13 +123,46 @@ describe('Platform Support Page', () => {
     expect(screen.getByText('Here is the detailed issue reproduction.')).toBeTruthy();
   });
 
-  it('allows posting a reply to the ticket', async () => {
-    (PlatformService.addSupportMessage as any).mockResolvedValue({
+  it('disables Send button when reply is empty or whitespace-only, and enables when valid text is typed', async () => {
+    renderComponent();
+
+    const viewButton = await screen.findByRole('button', { name: /view/i });
+    fireEvent.click(viewButton);
+
+    const textarea = await screen.findByPlaceholderText(/type a message to the user/i);
+    const sendBtn = screen.getByRole('button', { name: /send/i }) as HTMLButtonElement;
+
+    // Initially empty -> disabled
+    expect(sendBtn.disabled).toBe(true);
+
+    // Whitespace only -> still disabled
+    fireEvent.change(textarea, { target: { value: '    ' } });
+    expect(sendBtn.disabled).toBe(true);
+
+    // Valid text -> enabled
+    fireEvent.change(textarea, { target: { value: 'We are checking the server logs now.' } });
+    expect(sendBtn.disabled).toBe(false);
+
+    // Cleared again -> disabled
+    fireEvent.change(textarea, { target: { value: '' } });
+    expect(sendBtn.disabled).toBe(true);
+  });
+
+  it('allows Platform Admin to post a reply, appends to conversation thread, and clears input', async () => {
+    const newMessage = {
       id: 'm2',
       ticketId: 'tkt-1',
+      authorId: 'admin-1',
       body: 'Investigating this now.',
       isInternal: false,
       createdAt: new Date().toISOString(),
+      author: { id: 'admin-1', firstName: 'Platform', lastName: 'Admin', role: 'PLATFORM_ADMIN' },
+    };
+
+    (PlatformService.addSupportMessage as any).mockResolvedValue(newMessage);
+    (PlatformService.getSupportTicketById as any).mockResolvedValue({
+      ...sampleTicket,
+      messages: [...sampleTicket.messages, newMessage],
     });
 
     renderComponent();
@@ -126,10 +170,11 @@ describe('Platform Support Page', () => {
     const viewButton = await screen.findByRole('button', { name: /view/i });
     fireEvent.click(viewButton);
 
-    const textarea = await screen.findByPlaceholderText(/type a message to the user/i);
+    const textarea = (await screen.findByPlaceholderText(/type a message to the user/i)) as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: 'Investigating this now.' } });
 
     const sendBtn = screen.getByRole('button', { name: /send/i });
+    expect((sendBtn as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(sendBtn);
 
     await waitFor(() => {
@@ -138,9 +183,74 @@ describe('Platform Support Page', () => {
         isInternal: false,
       });
     });
+
+    // Check that input is cleared and new message appears
+    await waitFor(() => {
+      expect(textarea.value).toBe('');
+      expect(screen.getByText('Investigating this now.')).toBeTruthy();
+    });
   });
 
-  it('renders error state and allows retry', async () => {
+  it('supports posting an internal note with isInternal: true', async () => {
+    const internalMsg = {
+      id: 'm3',
+      ticketId: 'tkt-1',
+      authorId: 'admin-1',
+      body: 'Internal note: escalation to DevOps.',
+      isInternal: true,
+      createdAt: new Date().toISOString(),
+      author: { id: 'admin-1', firstName: 'Platform', lastName: 'Admin', role: 'PLATFORM_ADMIN' },
+    };
+
+    (PlatformService.addSupportMessage as any).mockResolvedValue(internalMsg);
+
+    renderComponent();
+
+    const viewButton = await screen.findByRole('button', { name: /view/i });
+    fireEvent.click(viewButton);
+
+    const internalCheckbox = await screen.findByLabelText(/internal note/i);
+    fireEvent.click(internalCheckbox);
+
+    const textarea = await screen.findByPlaceholderText(/add an internal note only visible to platform staff/i);
+    fireEvent.change(textarea, { target: { value: 'Internal note: escalation to DevOps.' } });
+
+    const sendBtn = screen.getByRole('button', { name: /send/i });
+    fireEvent.click(sendBtn);
+
+    await waitFor(() => {
+      expect(PlatformService.addSupportMessage).toHaveBeenCalledWith('tkt-1', {
+        body: 'Internal note: escalation to DevOps.',
+        isInternal: true,
+      });
+    });
+  });
+
+  it('displays error message banner in modal when reply API fails', async () => {
+    (PlatformService.addSupportMessage as any).mockRejectedValueOnce(
+      new Error('Access denied: Missing required permission(s) [platform.support.manage]'),
+    );
+
+    renderComponent();
+
+    const viewButton = await screen.findByRole('button', { name: /view/i });
+    fireEvent.click(viewButton);
+
+    const textarea = await screen.findByPlaceholderText(/type a message to the user/i);
+    fireEvent.change(textarea, { target: { value: 'Test reply message' } });
+
+    const sendBtn = screen.getByRole('button', { name: /send/i });
+    fireEvent.click(sendBtn);
+
+    expect(
+      await screen.findByText(/access denied: missing required permission\(s\) \[platform\.support\.manage\]/i),
+    ).toBeTruthy();
+
+    // Text in textarea remains for the user to retry or fix
+    expect((textarea as HTMLTextAreaElement).value).toBe('Test reply message');
+  });
+
+  it('renders error state and allows retry on initial load failure', async () => {
     (PlatformService.getSupportTickets as any).mockRejectedValueOnce(new Error('Network failure'));
     renderComponent();
 
