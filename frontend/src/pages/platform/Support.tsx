@@ -15,6 +15,7 @@ import {
   Lock,
   ChevronRight,
   X,
+  Loader2,
 } from 'lucide-react';
 import { Page, ErrorBox } from '../../components/platform/OperationsUI';
 import { PlatformService } from '../../services/platform.service';
@@ -70,6 +71,7 @@ export function Support() {
   const [replyText, setReplyText] = useState('');
   const [isInternalReply, setIsInternalReply] = useState(false);
   const [sendingReply, setSendingReply] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
 
   // Quick Resolve state
   const [showResolveModal, setShowResolveModal] = useState(false);
@@ -121,6 +123,9 @@ export function Support() {
   const handleOpenTicket = async (ticketId: string) => {
     setDetailLoading(true);
     setDetailError(null);
+    setReplyText('');
+    setReplyError(null);
+    setIsInternalReply(false);
     try {
       const fullTicket = await PlatformService.getSupportTicketById(ticketId);
       setSelectedTicket(fullTicket);
@@ -137,20 +142,39 @@ export function Support() {
     if (!selectedTicket || !replyText.trim() || sendingReply) return;
 
     setSendingReply(true);
+    setReplyError(null);
     try {
-      await PlatformService.addSupportMessage(selectedTicket.id, {
+      const newMsg = await PlatformService.addSupportMessage(selectedTicket.id, {
         body: replyText.trim(),
         isInternal: isInternalReply,
       });
       setReplyText('');
       setIsInternalReply(false);
-      // Reload ticket details
+
+      // Optimistically append the message to conversation thread immediately
+      if (newMsg && newMsg.id) {
+        setSelectedTicket((prev) => {
+          if (!prev || prev.id !== selectedTicket.id) return prev;
+          const currentMessages = prev.messages || [];
+          const exists = currentMessages.some((m) => m.id === newMsg.id);
+          return {
+            ...prev,
+            status:
+              prev.status === 'RESOLVED' || prev.status === 'CLOSED'
+                ? 'IN_PROGRESS'
+                : prev.status,
+            messages: exists ? currentMessages : [...currentMessages, newMsg],
+          };
+        });
+      }
+
+      // Reload ticket details from backend
       const refreshed = await PlatformService.getSupportTicketById(selectedTicket.id);
       setSelectedTicket(refreshed);
       // Update list in background
       fetchTickets();
     } catch (err: any) {
-      alert(`Failed to send reply: ${err?.message || 'Unknown error'}`);
+      setReplyError(err?.message || 'Failed to send reply');
     } finally {
       setSendingReply(false);
     }
@@ -634,7 +658,12 @@ export function Support() {
                 </div>
               </div>
               <button
-                onClick={() => setSelectedTicket(null)}
+                onClick={() => {
+                  setSelectedTicket(null);
+                  setReplyText('');
+                  setReplyError(null);
+                  setIsInternalReply(false);
+                }}
                 className="text-muted hover:text-ink p-1 rounded-lg hover:bg-soft"
               >
                 <X className="w-5 h-5" />
@@ -761,11 +790,32 @@ export function Support() {
 
             {/* Reply Input Box Footer */}
             <form onSubmit={handleSendReply} className="p-4 border-t border-line bg-surface">
+              {replyError && (
+                <div
+                  role="alert"
+                  className="mb-3 p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-600 text-xs flex items-center justify-between gap-2 animate-in fade-in"
+                >
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{replyError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplyError(null)}
+                    className="text-rose-600/70 hover:text-rose-700 p-0.5 rounded cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-muted">Post a Reply</span>
-                <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer select-none">
+                <label htmlFor="internal-note-checkbox" className="flex items-center gap-1.5 text-xs text-muted cursor-pointer select-none">
                   <input
+                    id="internal-note-checkbox"
                     type="checkbox"
+                    aria-label="Internal note (staff only)"
                     checked={isInternalReply}
                     onChange={(e) => setIsInternalReply(e.target.checked)}
                     className="rounded border-line text-primary focus:ring-0"
@@ -783,15 +833,35 @@ export function Support() {
                   }
                   className="flex-1 bg-soft border border-line rounded-lg p-2.5 text-xs text-ink focus:outline-hidden focus:ring-1 focus:ring-primary resize-none"
                   value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
+                  onChange={(e) => {
+                    setReplyText(e.target.value);
+                    if (replyError) setReplyError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                      e.preventDefault();
+                      if (replyText.trim() && !sendingReply) {
+                        handleSendReply(e);
+                      }
+                    }
+                  }}
                 />
                 <button
                   type="submit"
                   disabled={!replyText.trim() || sendingReply}
-                  className="px-4 py-2 bg-primary text-white rounded-lg text-xs font-medium hover:bg-primary-hover disabled:opacity-50 flex items-center justify-center gap-1.5 transition-colors shrink-0"
+                  className="px-4 py-2 bg-primary text-white rounded-lg text-xs font-medium hover:bg-primary-hover disabled:opacity-50 flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer disabled:cursor-not-allowed"
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>{sendingReply ? 'Sending...' : 'Send'}</span>
+                  {sendingReply ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Sending...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Send</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
