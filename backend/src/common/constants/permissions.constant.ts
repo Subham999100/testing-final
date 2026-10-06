@@ -43,6 +43,10 @@ export const PlatformPermissions = {
 
   // Platform Reports & Analytics
   REPORTS_READ: 'platform.reports.read',
+
+  // Platform Notifications
+  NOTIFICATIONS_READ: 'platform.notifications.read',
+  NOTIFICATIONS_MANAGE: 'platform.notifications.manage',
 } as const;
 
 export type PlatformPermissionKey = (typeof PlatformPermissions)[keyof typeof PlatformPermissions];

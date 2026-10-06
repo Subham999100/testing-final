@@ -6,7 +6,7 @@
 // ============================================================
 
 import React, { useState } from 'react';
-import { Building2, UserCheck, X, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Building2, UserCheck, X, ArrowLeft, ArrowRight, Eye, EyeOff } from 'lucide-react';
 
 export interface CreateOrganisationFormData {
   name: string;
@@ -39,6 +39,8 @@ export const CreateOrganisationModal: React.FC<Props> = ({
 }) => {
   const [step, setStep] = useState<1 | 2>(1);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [formData, setFormData] = useState<CreateOrganisationFormData>({
     name: '',
@@ -373,34 +375,54 @@ export const CreateOrganisationModal: React.FC<Props> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-slate-300 font-medium">Initial Password *</label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Min 8 characters"
-                    value={formData.superAdminPassword}
-                    onChange={(e) => {
-                      setError(null);
-                      setFormData({ ...formData, superAdminPassword: e.target.value });
-                    }}
-                    className="w-full p-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Min 8 characters"
+                      value={formData.superAdminPassword}
+                      onChange={(e) => {
+                        setError(null);
+                        setFormData({ ...formData, superAdminPassword: e.target.value });
+                      }}
+                      className="w-full p-2 pr-9 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 cursor-pointer"
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <label className="text-slate-300 font-medium">Confirm Password *</label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Repeat password"
-                    value={formData.superAdminPasswordConfirmation}
-                    onChange={(e) => {
-                      setError(null);
-                      setFormData({
-                        ...formData,
-                        superAdminPasswordConfirmation: e.target.value,
-                      });
-                    }}
-                    className="w-full p-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Repeat password"
+                      value={formData.superAdminPasswordConfirmation}
+                      onChange={(e) => {
+                        setError(null);
+                        setFormData({
+                          ...formData,
+                          superAdminPasswordConfirmation: e.target.value,
+                        });
+                      }}
+                      className="w-full p-2 pr-9 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 cursor-pointer"
+                      title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

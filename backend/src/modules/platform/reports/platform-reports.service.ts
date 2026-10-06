@@ -556,6 +556,32 @@ export class PlatformReportsService {
       return [header.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
     }
 
+    if (type === 'applications') {
+      const apps = await this.prisma.application.findMany({
+        where: query.organisationId ? { organisationId: query.organisationId } : {},
+        take: 500,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          job: { select: { title: true } },
+          candidate: { select: { firstName: true, lastName: true, email: true } },
+        },
+      });
+
+      const header = ['Application ID', 'Candidate Name', 'Candidate Email', 'Job Title', 'Stage', 'Source', 'Match Score', 'Applied At'];
+      const rows = apps.map((a) => [
+        escapeCsv(a.id),
+        escapeCsv(`${a.candidate?.firstName || ''} ${a.candidate?.lastName || ''}`.trim()),
+        escapeCsv(a.candidate?.email || ''),
+        escapeCsv(a.job?.title || ''),
+        escapeCsv(a.stage),
+        escapeCsv(a.source || 'PORTAL'),
+        escapeCsv(a.matchScore != null ? `${a.matchScore}%` : 'N/A'),
+        escapeCsv(a.createdAt.toISOString()),
+      ]);
+
+      return [header.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+    }
+
     // Default overview export
     const overview = await this.getOverview(query);
     const header = ['Category', 'Metric', 'Value'];

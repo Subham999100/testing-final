@@ -800,6 +800,23 @@ model OrgNotification {
   @@map("org_notifications")
 }
 
+model PlatformNotification {
+  id        String    @id @default(uuid())
+  userId    String?
+  type      String
+  title     String
+  message   String
+  link      String?
+  severity  String    @default("INFO")
+  metadata  Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt, createdAt])
+  @@index([createdAt])
+  @@map("platform_notifications")
+}
+
 model OrgTask {
   id             String     @id @default(uuid())
   organisationId String

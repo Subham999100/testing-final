@@ -16,6 +16,7 @@ import {
   NotFoundException,
   ConflictException,
   ForbiddenException,
+  BadRequestException,
   Logger,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
@@ -219,11 +220,19 @@ export class PlatformAdminService {
         lastName: dto.lastName,
         isActive: dto.isActive !== undefined ? dto.isActive : existing.isActive,
         platformAdminProfile: {
-          update: {
-            department: dto.department !== undefined ? dto.department : existing.platformAdminProfile?.department,
-            permissions: dto.permissions !== undefined ? dto.permissions : existing.platformAdminProfile?.permissions,
-            notes: dto.notes !== undefined ? dto.notes : existing.platformAdminProfile?.notes,
-            isActive: dto.isActive !== undefined ? dto.isActive : existing.platformAdminProfile?.isActive,
+          upsert: {
+            create: {
+              department: dto.department || 'Operations',
+              permissions: dto.permissions || [],
+              notes: dto.notes,
+              isActive: dto.isActive !== undefined ? dto.isActive : true,
+            },
+            update: {
+              department: dto.department !== undefined ? dto.department : existing.platformAdminProfile?.department,
+              permissions: dto.permissions !== undefined ? dto.permissions : existing.platformAdminProfile?.permissions,
+              notes: dto.notes !== undefined ? dto.notes : existing.platformAdminProfile?.notes,
+              isActive: dto.isActive !== undefined ? dto.isActive : existing.platformAdminProfile?.isActive,
+            },
           },
         },
       },
@@ -293,5 +302,53 @@ export class PlatformAdminService {
     });
 
     return updated;
+  }
+
+  /**
+   * Resets password for a Platform Admin.
+   * STRICT SECURITY: Only PLATFORM_SUPER_ADMIN can call this.
+   */
+  async resetPassword(id: string, newPassword: string, actor: AuthenticatedUser, ipAddress?: string, userAgent?: string) {
+    if (actor.role !== UserRole.PLATFORM_SUPER_ADMIN) {
+      throw new ForbiddenException('CRITICAL: Only Platform Super Admin can reset Platform Admin passwords');
+    }
+
+    if (!newPassword || newPassword.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters long');
+    }
+
+    const existing = await this.prisma.user.findUnique({ where: { id } });
+    if (!existing || existing.role !== UserRole.PLATFORM_ADMIN) {
+      throw new NotFoundException(`Platform Admin with ID ${id} not found`);
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id },
+        data: { passwordHash },
+      });
+
+      // Revoke any active sessions for security
+      await tx.platformSession.updateMany({
+        where: { userId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    });
+
+    await this.auditService.record({
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: 'PLATFORM_ADMIN_PASSWORD_RESET',
+      entityType: 'PLATFORM_ADMIN',
+      entityId: id,
+      metadata: { targetEmail: existing.email },
+      ipAddress,
+      userAgent,
+    });
+
+    return { success: true, message: 'Password reset successfully' };
   }
 }

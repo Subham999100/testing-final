@@ -5,6 +5,7 @@
 // ============================================================
 
 import { apiClient } from './api';
+import { getPlatformAccessToken } from './auth-session';
 import {
   PlatformDashboardSummary,
   Organisation,
@@ -18,6 +19,7 @@ import {
   SupportMessage,
   SupportTicketsResponse,
   ReportsOverview,
+  PlatformMonitoringOverview,
 } from '../types/platform.types';
 export const PlatformService = {
   async read(path: string, params?: Record<string, unknown>): Promise<any> {
@@ -139,6 +141,15 @@ export const PlatformService = {
     }
   },
 
+  async resetAdminPassword(id: string, password: string): Promise<any> {
+    try {
+      const res: any = await apiClient.post(`/platform/admins/${id}/reset-password`, { password });
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
+  },
+
   // ------------------------------------------------------------
   // TOKEN PLANS & LEDGER
   // ------------------------------------------------------------
@@ -243,7 +254,7 @@ export const PlatformService = {
     }
   },
 
-  async getMonitoringOverview() {
+  async getMonitoringOverview(): Promise<PlatformMonitoringOverview> {
     try {
       const res: any = await apiClient.get('/platform/monitoring');
       return res.data || res;
@@ -373,7 +384,7 @@ export const PlatformService = {
     type?: 'overview' | 'organisations' | 'jobs' | 'applications';
   }): Promise<void> {
     try {
-      const token = sessionStorage.getItem('clyptus_platform_token');
+      const token = getPlatformAccessToken();
       const urlParams = new URLSearchParams();
       if (params?.timeframe) urlParams.append('timeframe', params.timeframe);
       if (params?.startDate) urlParams.append('startDate', params.startDate);
@@ -401,6 +412,61 @@ export const PlatformService = {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(downloadUrl);
+    } catch (failure) {
+      throw failure;
+    }
+  },
+
+  // ------------------------------------------------------------
+  // NOTIFICATIONS
+  // ------------------------------------------------------------
+  async getNotifications(params?: {
+    page?: number;
+    limit?: number;
+    unread?: string;
+    type?: string;
+    severity?: string;
+    search?: string;
+  }): Promise<any> {
+    try {
+      const res: any = await apiClient.get('/platform/notifications', { params });
+      return res.data ? res : { data: res, meta: { total: res.length, totalPages: 1, page: 1 }, unread: 0 };
+    } catch (failure) {
+      throw failure;
+    }
+  },
+
+  async getUnreadNotificationCount(): Promise<{ unread: number }> {
+    try {
+      const res: any = await apiClient.get('/platform/notifications/unread-count');
+      return res.data || res;
+    } catch (failure) {
+      return { unread: 0 };
+    }
+  },
+
+  async markNotificationRead(id: string): Promise<any> {
+    try {
+      const res: any = await apiClient.patch(`/platform/notifications/${id}/read`);
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
+  },
+
+  async markAllNotificationsRead(): Promise<any> {
+    try {
+      const res: any = await apiClient.post('/platform/notifications/mark-all-read');
+      return res.data || res;
+    } catch (failure) {
+      throw failure;
+    }
+  },
+
+  async deleteNotification(id: string): Promise<any> {
+    try {
+      const res: any = await apiClient.delete(`/platform/notifications/${id}`);
+      return res.data || res;
     } catch (failure) {
       throw failure;
     }

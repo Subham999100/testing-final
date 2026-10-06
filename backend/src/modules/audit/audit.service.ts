@@ -81,9 +81,121 @@ export class AuditService {
       this.logger.log(
         `[AUDIT] Action: ${dto.action} on ${dto.entityType}:${dto.entityId} by ${dto.actorRole || 'SYSTEM'} (${dto.actorId || 'anon'})`,
       );
+
+      // Automatically dispatch notification to Platform Super Admin inbox
+      await this.generatePlatformNotification(dto, sanitizedMeta);
     } catch (err) {
       // Never allow audit logging failure to crash primary business flow, but log critical warning
       this.logger.error(`Failed to record audit log: ${(err as Error).message}`, (err as Error).stack);
+    }
+  }
+
+  /**
+   * Translates audit actions and organisation ticket events into real-time Platform Notifications
+   */
+  private async generatePlatformNotification(dto: AuditRecordDto, metadata: Record<string, any>): Promise<void> {
+    try {
+      const action = dto.action || '';
+      const actorRole = dto.actorRole || '';
+      const isOrgTicketCreated = action === 'ORG_SUPPORT_TICKET_CREATED';
+      const isOrgTicketReplied = action === 'ORG_SUPPORT_TICKET_REPLIED';
+      const isAdminAction =
+        actorRole.includes('ADMIN') ||
+        action.startsWith('PLATFORM_') ||
+        action.startsWith('ORGANISATION_');
+
+      if (!isOrgTicketCreated && !isOrgTicketReplied && !isAdminAction) {
+        return;
+      }
+
+      let title = '';
+      let message = '';
+      let link: string | null = null;
+      let severity = 'INFO';
+      let type = 'ADMIN_ACTION';
+
+      if (isOrgTicketCreated) {
+        type = 'TICKET_RAISED';
+        const num = metadata?.ticketNumber ? `#${metadata.ticketNumber}` : '';
+        const subj = metadata?.subject ? `"${metadata.subject}"` : 'Support Request';
+        const prio = metadata?.priority || 'MEDIUM';
+        severity = prio === 'URGENT' ? 'URGENT' : prio === 'HIGH' ? 'WARNING' : 'INFO';
+
+        let orgName = '';
+        if (dto.organisationId) {
+          const org = await this.prisma.organisation.findUnique({
+            where: { id: dto.organisationId },
+            select: { name: true },
+          });
+          orgName = org?.name ? ` by ${org.name}` : '';
+        }
+
+        title = `New Support Ticket ${num} Raised`;
+        message = `Ticket ${subj} [Priority: ${prio}] was raised${orgName}.`;
+        link = `/platform/support?ticketId=${dto.entityId}`;
+      } else if (isOrgTicketReplied) {
+        type = 'TICKET_UPDATED';
+        const num = metadata?.ticketNumber ? `#${metadata.ticketNumber}` : '';
+        title = `New Response on Ticket ${num}`;
+        message = `An organisation member replied to support ticket ${num}.`;
+        link = `/platform/support?ticketId=${dto.entityId}`;
+        severity = 'INFO';
+      } else if (isAdminAction) {
+        type = 'ADMIN_ACTION';
+        const roleLabel = actorRole ? actorRole.replace(/_/g, ' ') : 'Admin';
+
+        if (action.includes('SUSPEND') || action.includes('DISABLE') || action.includes('REVOKE')) {
+          severity = 'WARNING';
+        } else if (action.includes('CREATE') || action.includes('ACTIVATE')) {
+          severity = 'SUCCESS';
+        } else if (action.includes('SECURITY')) {
+          severity = 'WARNING';
+        }
+
+        const formattedAction = action
+          .replace(/^(PLATFORM_|ORG_)/, '')
+          .split('_')
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+          .join(' ');
+
+        title = `Admin Action: ${formattedAction}`;
+        message = `${roleLabel} updated ${dto.entityType} (${dto.entityId.slice(0, 8)}...). Action: ${formattedAction}.`;
+
+        switch (dto.entityType?.toLowerCase()) {
+          case 'supportticket':
+            link = `/platform/support?ticketId=${dto.entityId}`;
+            break;
+          case 'organisation':
+            link = `/platform/organisations`;
+            break;
+          case 'user':
+          case 'platformadminprofile':
+            link = `/platform/admins`;
+            break;
+          case 'tokentransaction':
+          case 'tokenplan':
+            link = `/platform/tokens`;
+            break;
+          case 'platformsetting':
+            link = `/platform/settings`;
+            break;
+          default:
+            link = `/platform/audit-logs`;
+        }
+      }
+
+      await this.prisma.platformNotification.create({
+        data: {
+          type,
+          title,
+          message,
+          link,
+          severity,
+          metadata: metadata ? (metadata as any) : undefined,
+        },
+      });
+    } catch (e) {
+      this.logger.warn(`Failed to generate platform notification from audit: ${(e as Error).message}`);
     }
   }
 

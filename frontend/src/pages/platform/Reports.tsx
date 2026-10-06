@@ -69,26 +69,59 @@ export function Reports() {
   }, [timeframe, organisationId]);
 
   // Handle CSV Export
-  const handleExport = async (type: 'overview' | 'organisations' | 'jobs') => {
+  const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [activeExportType, setActiveExportType] = useState<string | null>(null);
+
+  const handleExport = async (type: 'overview' | 'organisations' | 'jobs' | 'applications') => {
     setExporting(true);
+    setActiveExportType(type);
+    setExportMessage(null);
     try {
       await PlatformService.exportReportsCsv({
         timeframe,
         organisationId: organisationId || undefined,
         type,
       });
+      setExportMessage({
+        type: 'success',
+        text: `Real-time ${type.toUpperCase()} report successfully downloaded!`,
+      });
+      setTimeout(() => setExportMessage(null), 5000);
     } catch (err: any) {
-      alert(`Export failed: ${err?.message || 'Unknown error'}`);
+      setExportMessage({
+        type: 'error',
+        text: `Export failed: ${err?.message || 'Unable to download report file.'}`,
+      });
     } finally {
       setExporting(false);
+      setActiveExportType(null);
     }
   };
 
   return (
     <Page
       title="Platform Reports & Analytics"
-      description="Cross-platform telemetry, system-wide metrics, and tabular reporting."
+      description="Cross-platform telemetry, system-wide metrics, and real-time tabular reporting."
     >
+      {exportMessage && (
+        <div
+          role="status"
+          className={`p-3.5 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all ${
+            exportMessage.type === 'success'
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+              : 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300'
+          }`}
+        >
+          <span>{exportMessage.text}</span>
+          <button
+            onClick={() => setExportMessage(null)}
+            className="text-xs hover:underline ml-4 cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Top Filter and Export Bar */}
       <div className="bg-surface border border-line rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 mb-6 shadow-xs">
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
@@ -129,24 +162,62 @@ export function Reports() {
           )}
         </div>
 
-        {/* Export Buttons */}
-        <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+        {/* Real-time Export Buttons */}
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
           <button
             onClick={() => handleExport('overview')}
             disabled={exporting || loading}
-            className="px-3 py-1.5 bg-soft border border-line rounded-lg text-xs font-semibold text-ink hover:bg-line flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+            className="px-3 py-1.5 bg-soft border border-line rounded-lg text-xs font-semibold text-ink hover:bg-line flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer"
+            title="Download high-level executive metric summary"
           >
-            <Download className="w-3.5 h-3.5" />
+            {exporting && activeExportType === 'overview' ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
+            ) : (
+              <Download className="w-3.5 h-3.5 text-muted" />
+            )}
             <span>Export Overview CSV</span>
           </button>
 
           <button
             onClick={() => handleExport('organisations')}
             disabled={exporting || loading}
-            className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-primary-hover flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+            className="px-3 py-1.5 bg-soft border border-line rounded-lg text-xs font-semibold text-ink hover:bg-line flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer"
+            title="Download all organizations breakdown"
           >
-            <Download className="w-3.5 h-3.5" />
+            {exporting && activeExportType === 'organisations' ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
+            ) : (
+              <Download className="w-3.5 h-3.5 text-muted" />
+            )}
             <span>Export Organisations</span>
+          </button>
+
+          <button
+            onClick={() => handleExport('jobs')}
+            disabled={exporting || loading}
+            className="px-3 py-1.5 bg-soft border border-line rounded-lg text-xs font-semibold text-ink hover:bg-line flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer"
+            title="Download published jobs report"
+          >
+            {exporting && activeExportType === 'jobs' ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
+            ) : (
+              <Download className="w-3.5 h-3.5 text-muted" />
+            )}
+            <span>Export Jobs</span>
+          </button>
+
+          <button
+            onClick={() => handleExport('applications')}
+            disabled={exporting || loading}
+            className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-primary-hover flex items-center gap-1.5 disabled:opacity-50 transition-colors shadow-xs cursor-pointer"
+            title="Download candidates & applications report"
+          >
+            {exporting && activeExportType === 'applications' ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
+            ) : (
+              <Download className="w-3.5 h-3.5 text-white" />
+            )}
+            <span>Export Applications</span>
           </button>
         </div>
       </div>

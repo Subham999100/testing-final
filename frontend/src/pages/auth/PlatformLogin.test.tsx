@@ -105,7 +105,7 @@ describe("Shared landing and separate login pages", () => {
       fireEvent.change(screen.getByLabelText("Password"), {
         target: { value: "StrongPassword!123" },
       });
-      fireEvent.click(screen.getByRole("button"));
+      fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
       await waitFor(() =>
         expect(AuthService.login).toHaveBeenCalledWith(
           "person@example.test",
@@ -136,7 +136,7 @@ it("submits Remember me only when selected", async () => {
     target: { value: "StrongPassword!123" },
   });
   fireEvent.click(screen.getByLabelText(/Remember/i));
-  fireEvent.click(screen.getByRole("button"));
+  fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
   await waitFor(() =>
     expect(AuthService.login).toHaveBeenCalledWith(
       "person@example.test",
