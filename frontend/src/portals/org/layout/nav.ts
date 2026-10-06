@@ -57,6 +57,50 @@ export interface NavSection {
   items: NavItem[];
 }
 
+export const ORG_SUPER_ADMIN_NAV: NavSection[] = [
+  {
+    title: 'Governance & People',
+    items: [
+      { label: 'Dashboard', path: '/org', icon: LayoutDashboard, chunk: 'dashboard' },
+      { label: 'Recruiters', path: '/org/recruiters', icon: Users, perms: ['members.read', 'recruiters.manage'], chunk: 'team' },
+      { label: 'Roles & Permissions', path: '/org/roles-permissions', icon: ShieldCheck, perms: ['members.read', 'recruiters.permissions.manage'], chunk: 'team' },
+    ],
+  },
+  {
+    title: 'Tokens & Billing',
+    items: [
+      { label: 'Credits Allocation', path: '/org/credits-allocation', icon: Coins, perms: ['tokens.read', 'tokens.allocate'], chunk: 'tokens' },
+      { label: 'Billing & Token Purchases', path: '/org/billing', icon: CreditCard, perms: ['billing.read', 'tokens.purchase'], chunk: 'tokens' },
+      { label: 'Recruitment Analytics', path: '/org/analytics', icon: BarChart3, perms: ['analytics.org', 'analytics.recruiter'], chunk: 'insights' },
+    ],
+  },
+  {
+    title: 'Audit',
+    items: [
+      { label: 'Audit Logs', path: '/org/audit', icon: Activity, perms: ['audit.read.org', 'audit.read.self'], chunk: 'insights' },
+    ],
+  },
+  {
+    title: 'Administration',
+    items: [
+      { label: 'Organisation Settings', path: '/org/organisation', icon: Building2, perms: ['org.profile.read'], chunk: 'settings' },
+    ],
+  },
+  {
+    title: 'Help',
+    items: [
+      { label: 'Support', path: '/org/support', icon: LifeBuoy, perms: ['support.read'], chunk: 'support' },
+    ],
+  },
+];
+
+export function getNav(role?: string): NavSection[] {
+  if (role === 'ORGANISATION_SUPER_ADMIN') {
+    return ORG_SUPER_ADMIN_NAV;
+  }
+  return NAV;
+}
+
 export const NAV: NavSection[] = [
   {
     title: 'Hiring',
@@ -106,3 +150,4 @@ export const NAV: NavSection[] = [
     ],
   },
 ];
+

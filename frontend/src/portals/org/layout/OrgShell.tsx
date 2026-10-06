@@ -13,11 +13,13 @@ import { useRealtime } from '../lib/realtime';
 import { ROLE_LABEL, TOKEN_KEY, clearToken, getToken, useLogout, useMe, usePermissions } from '../lib/session';
 import { Toaster } from '../ui/toast';
 import { Avatar, Skeleton, cn } from '../ui/ui';
-import { NAV, loaders } from './nav';
+import { getNav, loaders } from './nav';
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
-  const { can, me } = usePermissions();
+  const { can, me, role } = usePermissions();
   const { pathname } = useLocation();
+  const navSections = getNav(role);
+
   return (
     <nav className="flex h-full flex-col" aria-label="Main">
       <div className="flex h-14 items-center gap-2.5 border-b border-slate-100 px-4">
@@ -34,7 +36,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </div>
       <div className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
-        {NAV.map((section) => {
+        {navSections.map((section) => {
           const items = section.items.filter((i) => !i.perms || can(...i.perms));
           if (!items.length) return null;
           return (
@@ -42,7 +44,12 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               <p className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{section.title}</p>
               <ul className="space-y-0.5">
                 {items.map((item) => {
-                  const active = item.path === '/org' ? pathname === '/org' : pathname.startsWith(item.path);
+                  const active =
+                    item.path === '/org'
+                      ? pathname === '/org'
+                      : pathname.startsWith(item.path) ||
+                        (item.path === '/org/credits-allocation' && pathname.startsWith('/org/tokens')) ||
+                        (item.path === '/org/recruiters' && (pathname.startsWith('/org/members') || pathname.startsWith('/org/recruiters')));
                   const Icon = item.icon;
                   return (
                     <li key={item.path}>
@@ -73,12 +80,13 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function Topbar({ onMenu }: { onMenu: () => void }) {
-  const { me, can } = usePermissions();
+  const { me, can, role } = usePermissions();
   const logout = useLogout();
   const navigate = useNavigate();
   const [q, setQ] = useState('');
   const [menu, setMenu] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  const isSuperAdmin = role === 'ORGANISATION_SUPER_ADMIN';
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -95,8 +103,13 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
     e.preventDefault();
     const term = q.trim();
     if (!term) return;
-    if (can('candidates.read', 'candidates.search')) navigate(`/org/candidates?search=${encodeURIComponent(term)}`);
-    else navigate(`/org/jobs?search=${encodeURIComponent(term)}`);
+    if (isSuperAdmin) {
+      navigate(`/org/recruiters?search=${encodeURIComponent(term)}`);
+    } else if (can('candidates.read', 'candidates.search')) {
+      navigate(`/org/candidates?search=${encodeURIComponent(term)}`);
+    } else {
+      navigate(`/org/jobs?search=${encodeURIComponent(term)}`);
+    }
   };
 
   return (
@@ -110,7 +123,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
           ref={searchRef}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search candidates or jobs…"
+          placeholder={isSuperAdmin ? 'Search recruiters…' : 'Search candidates or jobs…'}
           aria-label="Search"
           className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-14 text-sm focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100"
         />
@@ -118,9 +131,13 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
       </form>
       <div className="ml-auto flex items-center gap-1.5">
         {me?.tokens && (
-          <Link to="/org/tokens" className="hidden items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-200 sm:flex" title="Tokens you can spend">
+          <Link
+            to={isSuperAdmin ? '/org/credits-allocation' : '/org/tokens'}
+            className="hidden items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-200 sm:flex"
+            title={isSuperAdmin ? 'Organisation Credits' : 'Tokens you can spend'}
+          >
             <Coins className="h-3.5 w-3.5" />
-            {me.tokens.spendable.toLocaleString()}
+            {(isSuperAdmin ? me.tokens.balance : me.tokens.spendable).toLocaleString()}
           </Link>
         )}
         <Link to="/org/notifications" className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Notifications">

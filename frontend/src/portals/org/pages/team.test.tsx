@@ -88,6 +88,42 @@ describe('MembersPage (Organisation Admin & Recruiter Provisioning)', () => {
     expect(screen.getByRole('heading', { name: 'Create Recruiter' })).toBeTruthy();
     expect(screen.getByPlaceholderText('John Smith')).toBeTruthy();
     expect(screen.getByPlaceholderText('recruiter@acme.com')).toBeTruthy();
+
+    // Role dropdown verification
+    const roleSelect = screen.getByLabelText('Role') as HTMLSelectElement;
+    expect(roleSelect).toBeTruthy();
+    expect(roleSelect.value).toBe('RECRUITER');
+    expect(screen.getByRole('option', { name: 'Recruiter' })).toBeTruthy();
+
+    // Password visibility controls verification
+    const passwordInput = screen.getByPlaceholderText('Min 8 characters') as HTMLInputElement;
+    const confirmPasswordInput = screen.getByPlaceholderText('Repeat password') as HTMLInputElement;
+
+    expect(passwordInput.type).toBe('password');
+    expect(confirmPasswordInput.type).toBe('password');
+
+    const togglePasswordBtn = screen.getByRole('button', { name: 'Show password' }) as HTMLButtonElement;
+    const toggleConfirmBtn = screen.getByRole('button', { name: 'Show confirm password' }) as HTMLButtonElement;
+
+    // Must be type="button" so they do not submit the form
+    expect(togglePasswordBtn.type).toBe('button');
+    expect(toggleConfirmBtn.type).toBe('button');
+
+    // Toggle initial password visibility independently
+    fireEvent.click(togglePasswordBtn);
+    expect(passwordInput.type).toBe('text');
+    expect(confirmPasswordInput.type).toBe('password');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide password' }));
+    expect(passwordInput.type).toBe('password');
+
+    // Toggle confirm password visibility independently
+    fireEvent.click(toggleConfirmBtn);
+    expect(passwordInput.type).toBe('password');
+    expect(confirmPasswordInput.type).toBe('text');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide confirm password' }));
+    expect(confirmPasswordInput.type).toBe('password');
   });
 
   it('disables Create Recruiter and displays warning when limit is reached (25/25)', async () => {

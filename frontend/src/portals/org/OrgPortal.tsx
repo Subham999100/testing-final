@@ -10,6 +10,7 @@ import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import './org.css';
 import { OrgShell } from './layout/OrgShell';
 import { loaders } from './layout/nav';
+import { OrgRole } from './lib/api';
 import { usePermissions } from './lib/session';
 import { AcceptInvitePage, ChangePasswordPage, LoginPage } from './pages/auth';
 import { Button, EmptyState, PageSkeleton } from './ui/ui';
@@ -20,6 +21,8 @@ const page = (loader: Loader, name: string) =>
 
 const Dashboard = page(loaders.dashboard, 'DashboardPage');
 const Members = page(loaders.team, 'MembersPage');
+const Recruiters = page(loaders.team, 'RecruitersPage');
+const RolesPermissions = page(loaders.team, 'RolesPermissionsPage');
 const MemberDetail = page(loaders.team, 'MemberDetailPage');
 const Jobs = page(loaders.jobs, 'JobsPage');
 const JobForm = page(loaders.jobs, 'JobFormPage');
@@ -81,10 +84,19 @@ class PageBoundary extends React.Component<{ children: React.ReactNode }, { fail
   }
 }
 
-function Guard({ perms, children }: { perms?: string[]; children: React.ReactNode }) {
-  const { me, can } = usePermissions();
+function Guard({
+  perms,
+  disallowedRoles,
+  children,
+}: {
+  perms?: string[];
+  disallowedRoles?: OrgRole[];
+  children: React.ReactNode;
+}) {
+  const { me, can, role } = usePermissions();
   const { pathname } = useLocation();
   if (!me) return <PageSkeleton />;
+  if (disallowedRoles && role && disallowedRoles.includes(role)) return <Forbidden />;
   if (perms && !can(...perms)) return <Forbidden />;
   return (
     <PageBoundary key={pathname}>
@@ -93,11 +105,21 @@ function Guard({ perms, children }: { perms?: string[]; children: React.ReactNod
   );
 }
 
+function MembersRoute() {
+  const { role } = usePermissions();
+  if (role === 'ORGANISATION_SUPER_ADMIN') {
+    return <Navigate to="/org/recruiters" replace />;
+  }
+  return <Members />;
+}
+
 const P = {
   jobs: ['jobs.read.all', 'jobs.read.assigned'],
   apps: ['applications.read.all', 'applications.read.assigned'],
   cands: ['candidates.read', 'candidates.search'],
 };
+
+const NO_OSA: OrgRole[] = ['ORGANISATION_SUPER_ADMIN'];
 
 export default function OrgPortal() {
   return (
@@ -107,34 +129,52 @@ export default function OrgPortal() {
       <Route path="change-password" element={<ChangePasswordPage />} />
       <Route element={<OrgShell />}>
         <Route index element={<Guard><Dashboard /></Guard>} />
-        <Route path="jobs" element={<Guard perms={P.jobs}><Jobs /></Guard>} />
-        <Route path="jobs/new" element={<Guard perms={['jobs.create']}><JobForm /></Guard>} />
-        <Route path="jobs/:id" element={<Guard perms={P.jobs}><JobDetail /></Guard>} />
-        <Route path="jobs/:id/edit" element={<Guard perms={['jobs.update']}><JobForm /></Guard>} />
-        <Route path="jobs/:id/pipeline" element={<Guard perms={P.apps}><Pipeline /></Guard>} />
-        <Route path="candidates" element={<Guard perms={P.cands}><Candidates /></Guard>} />
-        <Route path="candidates/:id" element={<Guard perms={['candidates.read']}><CandidateDetail /></Guard>} />
-        <Route path="applications" element={<Guard perms={P.apps}><Applications /></Guard>} />
-        <Route path="applications/:id" element={<Guard perms={P.apps}><ApplicationDetail /></Guard>} />
-        <Route path="interviews" element={<Guard perms={['interviews.read']}><Interviews /></Guard>} />
-        <Route path="interviews/:id" element={<Guard perms={['interviews.read']}><InterviewDetail /></Guard>} />
-        <Route path="offers" element={<Guard perms={['offers.read']}><Offers /></Guard>} />
-        <Route path="offers/:id" element={<Guard perms={['offers.read']}><OfferDetail /></Guard>} />
-        <Route path="members" element={<Guard perms={['members.read']}><Members /></Guard>} />
+
+        {/* Governance & People */}
+        <Route path="recruiters" element={<Guard perms={['members.read', 'recruiters.manage']}><Recruiters /></Guard>} />
+        <Route path="recruiters/:id" element={<Guard perms={['members.read']}><MemberDetail /></Guard>} />
+        <Route path="roles-permissions" element={<Guard perms={['members.read', 'recruiters.permissions.manage']}><RolesPermissions /></Guard>} />
+        <Route path="members" element={<Guard perms={['members.read']}><MembersRoute /></Guard>} />
         <Route path="members/:id" element={<Guard perms={['members.read']}><MemberDetail /></Guard>} />
+
+        {/* Tokens & Billing */}
+        <Route path="credits-allocation" element={<Guard perms={['tokens.read']}><Tokens /></Guard>} />
         <Route path="tokens" element={<Guard perms={['tokens.read']}><Tokens /></Guard>} />
         <Route path="billing" element={<Guard perms={['billing.read', 'tokens.purchase']}><Billing /></Guard>} />
         <Route path="billing/:id" element={<Guard perms={['billing.read', 'tokens.purchase']}><Invoice /></Guard>} />
         <Route path="analytics" element={<Guard perms={['analytics.org', 'analytics.recruiter', 'analytics.self']}><Analytics /></Guard>} />
-        <Route path="ai" element={<Guard perms={['ai.use', 'ai.govern']}><Ai /></Guard>} />
+
+        {/* Audit */}
         <Route path="audit" element={<Guard perms={['audit.read.org', 'audit.read.self']}><Audit /></Guard>} />
-        <Route path="security" element={<Guard perms={['org.security.manage']}><Security /></Guard>} />
-        <Route path="messages" element={<Guard perms={['messages.use', 'messages.oversee']}><Messages /></Guard>} />
-        <Route path="notifications" element={<Guard><Notifications /></Guard>} />
-        <Route path="tasks" element={<Guard perms={['tasks.use']}><Tasks /></Guard>} />
+
+        {/* Administration */}
         <Route path="organisation" element={<Guard perms={['org.profile.read']}><Organisation /></Guard>} />
-        <Route path="profile" element={<Guard><Profile /></Guard>} />
+        <Route path="settings" element={<Navigate to="/org/organisation" replace />} />
+
+        {/* Help & Profile */}
         <Route path="support" element={<Guard perms={['support.read']}><Support /></Guard>} />
+        <Route path="notifications" element={<Guard><Notifications /></Guard>} />
+        <Route path="profile" element={<Guard><Profile /></Guard>} />
+
+        {/* Recruiter Workflow Routes (Disallowed for Organisation Super Admin) */}
+        <Route path="jobs" element={<Guard perms={P.jobs} disallowedRoles={NO_OSA}><Jobs /></Guard>} />
+        <Route path="jobs/new" element={<Guard perms={['jobs.create']} disallowedRoles={NO_OSA}><JobForm /></Guard>} />
+        <Route path="jobs/:id" element={<Guard perms={P.jobs} disallowedRoles={NO_OSA}><JobDetail /></Guard>} />
+        <Route path="jobs/:id/edit" element={<Guard perms={['jobs.update']} disallowedRoles={NO_OSA}><JobForm /></Guard>} />
+        <Route path="jobs/:id/pipeline" element={<Guard perms={P.apps} disallowedRoles={NO_OSA}><Pipeline /></Guard>} />
+        <Route path="candidates" element={<Guard perms={P.cands} disallowedRoles={NO_OSA}><Candidates /></Guard>} />
+        <Route path="candidates/:id" element={<Guard perms={['candidates.read']} disallowedRoles={NO_OSA}><CandidateDetail /></Guard>} />
+        <Route path="applications" element={<Guard perms={P.apps} disallowedRoles={NO_OSA}><Applications /></Guard>} />
+        <Route path="applications/:id" element={<Guard perms={P.apps} disallowedRoles={NO_OSA}><ApplicationDetail /></Guard>} />
+        <Route path="interviews" element={<Guard perms={['interviews.read']} disallowedRoles={NO_OSA}><Interviews /></Guard>} />
+        <Route path="interviews/:id" element={<Guard perms={['interviews.read']} disallowedRoles={NO_OSA}><InterviewDetail /></Guard>} />
+        <Route path="offers" element={<Guard perms={['offers.read']} disallowedRoles={NO_OSA}><Offers /></Guard>} />
+        <Route path="offers/:id" element={<Guard perms={['offers.read']} disallowedRoles={NO_OSA}><OfferDetail /></Guard>} />
+        <Route path="messages" element={<Guard perms={['messages.use', 'messages.oversee']} disallowedRoles={NO_OSA}><Messages /></Guard>} />
+        <Route path="tasks" element={<Guard perms={['tasks.use']} disallowedRoles={NO_OSA}><Tasks /></Guard>} />
+        <Route path="ai" element={<Guard perms={['ai.use', 'ai.govern']} disallowedRoles={NO_OSA}><Ai /></Guard>} />
+        <Route path="security" element={<Guard perms={['org.security.manage']} disallowedRoles={NO_OSA}><Security /></Guard>} />
+
         <Route path="*" element={<Navigate to="/org" replace />} />
       </Route>
     </Routes>

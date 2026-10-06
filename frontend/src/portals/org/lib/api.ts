@@ -82,6 +82,15 @@ export const api = {
     const res = (await apiClient.post(`/org/support/${id}/messages`, body)) as any;
     return res.data ?? res;
   },
+  async getPermissionCatalog(): Promise<OrgPermissionCatalogResponse> {
+    return api.get<OrgPermissionCatalogResponse>('/org/permissions/catalog');
+  },
+  async getMember(id: string): Promise<OrgMemberPermissionDetail> {
+    return api.get<OrgMemberPermissionDetail>(`/org/members/${id}`);
+  },
+  async updateMemberPermissions(id: string, permissions: string[]): Promise<OrgMemberPermissionDetail> {
+    return api.put<OrgMemberPermissionDetail>(`/org/members/${id}/permissions`, { permissions });
+  },
 };
 
 export const orgApi = api;
@@ -175,4 +184,50 @@ export interface OrgSupportTicketsResponse {
     inProgress: number;
     resolved: number;
   };
+}
+
+export interface OrgPermissionItem {
+  key: string;
+  group: string;
+  label: string;
+  description?: string;
+}
+
+export interface OrgPermissionCatalogResponse {
+  catalog: OrgPermissionItem[];
+  ceilings: Record<OrgRole, string[]>;
+  defaults: Record<OrgRole, string[]>;
+  grantable: {
+    ORGANISATION_ADMIN?: string[];
+    RECRUITER?: string[];
+  };
+}
+
+export interface OrgMemberPermissionDetail {
+  id: string;
+  email: string;
+  name: string;
+  firstName: string;
+  lastName: string;
+  role: OrgRole;
+  status: string;
+  title: string | null;
+  timezone: string;
+  joinedAt: string;
+  permissions: string[];
+  ceiling: string[];
+  grantable: string[];
+  canManage: boolean;
+  tokens: {
+    allocated: number;
+    consumed: number;
+    remaining: number;
+  };
+  recentActivity: Array<{
+    id: string;
+    action: string;
+    entityType: string;
+    entityId: string | null;
+    createdAt: string;
+  }>;
 }
