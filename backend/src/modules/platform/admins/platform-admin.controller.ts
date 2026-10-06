@@ -96,4 +96,19 @@ export class PlatformAdminController {
     const userAgent = req.headers['user-agent'];
     return this.adminService.toggleStatus(id, isActive, actor, ipAddress, userAgent);
   }
+
+  @Post(':id/reset-password')
+  @Roles(UserRole.PLATFORM_SUPER_ADMIN)
+  @RequirePermissions(PlatformPermissions.ADMINS_UPDATE)
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(
+    @Param('id') id: string,
+    @Body('password') password: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Req() req: Request,
+  ) {
+    const ipAddress = (req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress) as string;
+    const userAgent = req.headers['user-agent'];
+    return this.adminService.resetPassword(id, password, actor, ipAddress, userAgent);
+  }
 }

@@ -3,8 +3,8 @@
 // ============================================================
 
 import { clsx, type ClassValue } from 'clsx';
-import { Coins, Loader2, X } from 'lucide-react';
-import React, { forwardRef, useEffect } from 'react';
+import { Coins, Loader2, X, Eye, EyeOff } from 'lucide-react';
+import React, { forwardRef, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { twMerge } from 'tailwind-merge';
 import { PageMeta } from '../lib/api';
@@ -58,8 +58,32 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 const control =
   'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-50';
 
-export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(function Input({ className, ...p }, ref) {
-  return <input ref={ref} className={cn(control, 'h-9', className)} {...p} />;
+export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(function Input({ className, type, ...p }, ref) {
+  const [showPassword, setShowPassword] = useState(false);
+
+  if (type === 'password') {
+    return (
+      <div className="relative w-full">
+        <input
+          ref={ref}
+          type={showPassword ? 'text' : 'password'}
+          className={cn(control, 'h-9 pr-9', className)}
+          {...p}
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => setShowPassword(!showPassword)}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+          title={showPassword ? 'Hide password' : 'Show password'}
+        >
+          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+    );
+  }
+
+  return <input ref={ref} type={type} className={cn(control, 'h-9', className)} {...p} />;
 });
 
 export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea(

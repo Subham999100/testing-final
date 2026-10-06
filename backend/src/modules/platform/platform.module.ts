@@ -19,6 +19,8 @@ import { PlatformSecurityController } from './security/platform-security.control
 import { PlatformSettingsController } from './settings/platform-settings.controller';
 import { PlatformSupportController } from './support/platform-support.controller';
 import { PlatformReportsController } from './reports/platform-reports.controller';
+import { PlatformNotificationController } from './notifications/platform-notification.controller';
+import { PlatformMonitoringController } from './monitoring/platform-monitoring.controller';
 
 // Services
 import { PlatformAuthService } from './auth/platform-auth.service';
@@ -31,6 +33,8 @@ import { PlatformSecurityService } from './security/platform-security.service';
 import { PlatformSettingsService } from './settings/platform-settings.service';
 import { PlatformSupportService } from './support/platform-support.service';
 import { PlatformReportsService } from './reports/platform-reports.service';
+import { PlatformNotificationService } from './notifications/platform-notification.service';
+import { PlatformMonitoringService } from './monitoring/platform-monitoring.service';
 
 // Guards
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -73,6 +77,8 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
     PlatformSettingsController,
     PlatformSupportController,
     PlatformReportsController,
+    PlatformNotificationController,
+    PlatformMonitoringController,
   ],
   providers: [
     PlatformAuthService,
@@ -85,6 +91,8 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
     PlatformSettingsService,
     PlatformSupportService,
     PlatformReportsService,
+    PlatformNotificationService,
+    PlatformMonitoringService,
     JwtAuthGuard,
     RolesGuard,
     PermissionsGuard,
@@ -96,6 +104,8 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
     PlatformTokenService,
     PlatformSupportService,
     PlatformReportsService,
+    PlatformNotificationService,
+    PlatformMonitoringService,
   ],
 })
 export class PlatformModule {}

@@ -17,7 +17,7 @@ export const PlatformHeader: React.FC = () => {
     'notifications',
     { limit: 1 },
     hasPermission('platform.notifications.read'),
-    30000,
+    5000,
   );
   const notificationsCount = notifications.data?.unread || 0;
   const [searchQuery, setSearchQuery] = useState('');

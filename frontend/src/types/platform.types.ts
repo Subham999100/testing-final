@@ -373,3 +373,27 @@ export interface ReportsOverview {
   }>;
 }
 
+export interface PlatformNotificationItem {
+  id: string;
+  userId?: string | null;
+  type: string;
+  title: string;
+  message: string;
+  link?: string | null;
+  severity: 'INFO' | 'SUCCESS' | 'WARNING' | 'URGENT';
+  metadata?: Record<string, any> | null;
+  readAt?: string | null;
+  createdAt: string;
+}
+
+export interface PlatformNotificationsResponse {
+  data: PlatformNotificationItem[];
+  meta: {
+    total: number;
+    totalPages: number;
+    page: number;
+    limit: number;
+  };
+  unread: number;
+}
+

@@ -173,14 +173,14 @@ export const SuperAdminLogin: React.FC = () => {
               <label htmlFor="super-admin-password" className="field-label">
                 Password
               </label>
-              <div className="password-field">
+              <div className="password-field relative flex items-center">
                 <LockKeyhole aria-hidden="true" />
                 <input
                   id="super-admin-password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   {...register('password')}
-                  className="field-input"
+                  className="field-input pr-10"
                   placeholder="Enter your security password"
                   aria-invalid={!!errors.password}
                   aria-describedby={
@@ -188,6 +188,18 @@ export const SuperAdminLogin: React.FC = () => {
                   }
                   disabled={isAuthenticating || isHydrating}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink p-1 cursor-pointer transition-colors"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" aria-hidden="true" />
+                  ) : (
+                    <Eye className="w-4 h-4" aria-hidden="true" />
+                  )}
+                </button>
               </div>
               {errors.password && (
                 <p id="super-admin-password-error" className="field-error">
