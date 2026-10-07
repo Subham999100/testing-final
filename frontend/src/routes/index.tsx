@@ -32,6 +32,7 @@ import { Notifications } from '../pages/platform/Notifications';
 import { Moderation } from '../pages/platform/Moderation';
 import { Reports } from '../pages/platform/Reports';
 import { OrganisationInvitation } from '../pages/auth/OrganisationInvitation';
+import { OrganisationApplicationPage } from '../pages/public/OrganisationApplicationPage';
 
 // Organisation portal (Org Super Admin · Org Admin · Recruiter) — lazy-loaded, lives under /org/*
 const OrgPortal = React.lazy(() => import('../portals/org/OrgPortal'));
@@ -39,6 +40,9 @@ const OrgPortal = React.lazy(() => import('../portals/org/OrgPortal'));
 export const AppRoutes: React.FC = () => (
   <Routes>
     {/* Public Routes */}
+    <Route path="/apply" element={<OrganisationApplicationPage />} />
+    <Route path="/apply/status" element={<OrganisationApplicationPage />} />
+    <Route path="/organisation/apply" element={<Navigate to="/apply" replace />} />
     <Route path="/organisation-invitation" element={<OrganisationInvitation />} />
     <Route path="/" element={<PlatformPortalSelection />} />
     <Route path="/platform/login" element={<PlatformPortalSelection />} />

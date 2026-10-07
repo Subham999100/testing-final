@@ -10,6 +10,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { PlatformModule } from './modules/platform/platform.module';
 import { OrgModule } from './modules/org/org.module';
+import { PublicModule } from './modules/public/public.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { OrgModule } from './modules/org/org.module';
     IntegrationsModule,
     PlatformModule,
     OrgModule,
+    PublicModule,
   ],
 })
 export class AppModule {}

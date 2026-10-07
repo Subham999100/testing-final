@@ -30,6 +30,8 @@ model User {
   createdSupportTickets SupportTicket[]     @relation("CreatedSupportTickets")
   assignedSupportTickets SupportTicket[]    @relation("AssignedSupportTickets")
   supportMessages      SupportMessage[]      @relation("AuthorSupportMessages")
+  reviewedOrganisationApplications OrganisationApplication[] @relation("ReviewedOrganisationApplications")
+  applicationReviewsInitiated      ApplicationReviewHistory[] @relation("ActorApplicationReviews")
 
   @@index([role])
   @@index([organisationId])
@@ -90,6 +92,7 @@ model Organisation {
   tokenTransactions TokenTransaction[]
   users             User[]
   supportTickets    SupportTicket[]
+  createdFromApplication OrganisationApplication? @relation("CreatedFromApplication")
 
   @@index([status])
   @@index([slug])
@@ -128,6 +131,7 @@ model TokenPlan {
   sortOrder    Int          @default(0)
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
+  organisationApplications OrganisationApplication[] @relation("PlanOrganisationApplications")
 
   @@index([isActive])
   @@index([code])
@@ -927,4 +931,138 @@ model SupportMessage {
   @@index([ticketId, createdAt])
   @@map("support_messages")
 }
+
+// ============================================================
+// ORGANISATION APPLICATIONS & PLATFORM VERIFICATION DOMAIN
+// ============================================================
+
+enum OrgApplicationStatus {
+  PENDING_REVIEW
+  MORE_INFO_REQUESTED
+  APPROVED
+  REJECTED
+}
+
+enum ApplicationPaymentStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+enum ApplicationDocumentType {
+  REGISTRATION_CERTIFICATE
+  TAX_ID
+  AUTHORIZATION_LETTER
+  PAYMENT_PROOF
+  OTHER
+}
+
+enum ApplicationReviewAction {
+  SUBMITTED
+  INFO_REQUESTED
+  INFO_SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+model OrganisationApplication {
+  id                     String                   @id @default(uuid())
+  applicationNumber      Int                      @unique @default(autoincrement())
+
+  // Proposed Organisation Details
+  name                   String
+  slug                   String
+  domain                 String?
+  contactEmail           String
+  contactPhone           String?
+  industry               String?
+  companySize            String?
+  website                String?
+  address                String?
+
+  // Authorised Representative / Applicant Details
+  ownerFirstName         String
+  ownerLastName          String
+  ownerEmail             String
+  ownerPhone             String?
+  ownerDesignation       String?
+
+  // Plan Selection & Payment Information
+  selectedPlanId         String?
+  selectedPlan           TokenPlan?               @relation("PlanOrganisationApplications", fields: [selectedPlanId], references: [id], onDelete: SetNull)
+  paymentMethod          String?                  // e.g. 'OFFLINE_PROOF', 'ONLINE'
+  paymentReference       String?                  // e.g. UTR, bank wire reference, order id
+  paymentStatus          ApplicationPaymentStatus @default(PENDING)
+
+  // Verification & Review Workflow
+  status                 OrgApplicationStatus     @default(PENDING_REVIEW)
+  rejectionReason        String?
+  requestedInfoNotes     String?
+  applicantResponseNotes String?
+
+  reviewedByUserId       String?
+  reviewedByUser         User?                    @relation("ReviewedOrganisationApplications", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  reviewedAt             DateTime?
+
+  // Resulting Created Organisation (set upon approval)
+  createdOrganisationId String?                  @unique
+  createdOrganisation   Organisation?            @relation("CreatedFromApplication", fields: [createdOrganisationId], references: [id], onDelete: SetNull)
+
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+
+  documents              ApplicationDocument[]
+  reviewHistory          ApplicationReviewHistory[]
+
+  @@index([status])
+  @@index([contactEmail])
+  @@index([ownerEmail])
+  @@index([slug])
+  @@index([createdAt])
+  @@index([reviewedByUserId])
+  @@index([selectedPlanId])
+  @@map("organisation_applications")
+}
+
+model ApplicationDocument {
+  id            String                  @id @default(uuid())
+  applicationId String
+  application   OrganisationApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  type          ApplicationDocumentType
+  fileName      String                  // Original file name (e.g. registration.pdf)
+  fileSize      Int                     // File size in bytes
+  mimeType      String                  // e.g. application/pdf, image/png
+  storageKey    String                  // Opaque storage reference key (NOT a public URL)
+  metadata      Json?                   @default("{}")
+
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@index([applicationId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("application_documents")
+}
+
+model ApplicationReviewHistory {
+  id            String                  @id @default(uuid())
+  applicationId String
+  application   OrganisationApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  actorId       String?
+  actor         User?                   @relation("ActorApplicationReviews", fields: [actorId], references: [id], onDelete: SetNull)
+  actorRole     String?                 // e.g. PLATFORM_SUPER_ADMIN, PLATFORM_ADMIN, APPLICANT
+  action        ApplicationReviewAction
+  notes         String?
+  metadata      Json?                   @default("{}")
+
+  createdAt     DateTime                @default(now())
+
+  @@index([applicationId, createdAt])
+  @@index([actorId])
+  @@index([action])
+  @@map("application_review_history")
+}
+
 
