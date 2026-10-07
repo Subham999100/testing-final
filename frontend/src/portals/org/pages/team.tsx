@@ -250,6 +250,7 @@ function CreateRecruiterSheet({ open, onClose }: { open: boolean; onClose: () =>
         <Field label="Initial Password" error={formState.errors.password?.message}>
           <div className="relative">
             <Input
+              disableToggle
               type={showPassword ? 'text' : 'password'}
               placeholder="Min 8 characters"
               className="pr-10"
@@ -268,6 +269,7 @@ function CreateRecruiterSheet({ open, onClose }: { open: boolean; onClose: () =>
         <Field label="Confirm Password" error={formState.errors.confirmPassword?.message}>
           <div className="relative">
             <Input
+              disableToggle
               type={showConfirmPassword ? 'text' : 'password'}
               placeholder="Repeat password"
               className="pr-10"

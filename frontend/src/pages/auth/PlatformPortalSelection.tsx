@@ -119,6 +119,19 @@ export const PlatformPortalSelection: React.FC = () => {
           </section>
         </div>
 
+        <div className="mt-8 p-4 rounded-xl border border-line bg-surface max-w-xl mx-auto flex items-center justify-between text-xs">
+          <div>
+            <span className="font-semibold text-ink block">New to Clyptus?</span>
+            <span className="text-muted">Register your organisation to access multi-tenant hiring tools.</span>
+          </div>
+          <Link
+            to="/apply"
+            className="button button-secondary button-small whitespace-nowrap ml-4 flex items-center gap-1"
+          >
+            Apply for Onboarding <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
         <p className="access-note">
           Use the login portal assigned to your role. All administrative actions are permission-controlled, cryptographically authenticated, and audited.
         </p>

@@ -11,6 +11,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PlatformAuthController } from './auth/platform-auth.controller';
 import { PlatformDashboardController } from './dashboard/platform-dashboard.controller';
 import { PlatformOrganisationController } from './organisations/platform-organisation.controller';
+import { PlatformOrganisationVerificationController } from './organisations/platform-organisation-verification.controller';
 import { PlatformAdminController } from './admins/platform-admin.controller';
 import { PlatformTokenController } from './tokens/platform-token.controller';
 import { PlatformAnalyticsController } from './analytics/platform-analytics.controller';
@@ -26,6 +27,7 @@ import { PlatformMonitoringController } from './monitoring/platform-monitoring.c
 import { PlatformAuthService } from './auth/platform-auth.service';
 import { PlatformDashboardService } from './dashboard/platform-dashboard.service';
 import { PlatformOrganisationService } from './organisations/platform-organisation.service';
+import { PlatformOrganisationVerificationService } from './organisations/platform-organisation-verification.service';
 import { PlatformAdminService } from './admins/platform-admin.service';
 import { PlatformTokenService } from './tokens/platform-token.service';
 import { PlatformAnalyticsService } from './analytics/platform-analytics.service';
@@ -69,6 +71,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
     PlatformAuthController,
     PlatformDashboardController,
     PlatformOrganisationController,
+    PlatformOrganisationVerificationController,
     PlatformAdminController,
     PlatformTokenController,
     PlatformAnalyticsController,
@@ -84,6 +87,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
     PlatformAuthService,
     PlatformDashboardService,
     PlatformOrganisationService,
+    PlatformOrganisationVerificationService,
     PlatformAdminService,
     PlatformTokenService,
     PlatformAnalyticsService,
@@ -100,6 +104,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
   exports: [
     PlatformAuthService,
     PlatformOrganisationService,
+    PlatformOrganisationVerificationService,
     PlatformAdminService,
     PlatformTokenService,
     PlatformSupportService,

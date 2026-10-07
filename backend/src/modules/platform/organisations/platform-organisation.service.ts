@@ -29,8 +29,39 @@ import { SuspendOrganisationDto } from './dto/suspend-organisation.dto';
 import { QueryOrganisationDto } from './dto/query-organisation.dto';
 import { TransferSuperAdminDto } from './dto/transfer-super-admin.dto';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
-import { OrganisationStatus, TokenTransactionType, UserRole } from '@prisma/client';
+import {
+  Prisma,
+  OrganisationStatus,
+  TokenTransactionType,
+  UserRole,
+  OrgApplicationStatus,
+  ApplicationPaymentStatus,
+  ApplicationReviewAction,
+} from '@prisma/client';
 import { ALL_ORG_PERMISSIONS } from '../../org/common/org-permissions';
+
+export interface ProvisionOrganisationCoreParams {
+  name: string;
+  slug: string;
+  domain?: string | null;
+  contactEmail: string;
+  contactPhone?: string | null;
+  tier?: string;
+  recruiterLimit?: number;
+  industry?: string | null;
+  companySize?: string | null;
+  website?: string | null;
+  address?: string | null;
+  billingDetails?: any;
+  initialTokens?: number;
+  tokenTransactionReason?: string;
+  tokenTransactionMetadata?: Record<string, any>;
+  superAdminFirstName: string;
+  superAdminLastName: string;
+  superAdminEmail: string;
+  superAdminPasswordHash: string;
+  actorUserId: string;
+}
 
 @Injectable()
 export class PlatformOrganisationService {
@@ -504,8 +535,104 @@ export class PlatformOrganisationService {
   }
 
   /**
+   * Reusable transactional core for provisioning an organisation and its
+   * associated ledger, limits, Super Admin user, and OrgMemberProfile.
+   * MUST be executed inside an existing Prisma TransactionClient.
+   * Ensures ONE DATABASE TRANSACTION owns the complete provisioning operation.
+   */
+  async provisionOrganisationCore(
+    tx: Prisma.TransactionClient,
+    params: ProvisionOrganisationCoreParams,
+  ) {
+    const initialTokens = params.initialTokens ?? 0;
+
+    const org = await tx.organisation.create({
+      data: {
+        name: params.name,
+        slug: params.slug,
+        domain: params.domain || null,
+        contactEmail: params.contactEmail,
+        contactPhone: params.contactPhone || null,
+        status: OrganisationStatus.ACTIVE,
+        tier: params.tier || 'STANDARD',
+        recruiterLimit: params.recruiterLimit ?? 25,
+        metadata: {
+          create: {
+            industry: params.industry || null,
+            companySize: params.companySize || null,
+            website: params.website || null,
+            address: params.address || null,
+            billingDetails: params.billingDetails ?? undefined,
+          },
+        },
+        tokenBalance: {
+          create: {
+            balance: initialTokens,
+            allocatedTokens: initialTokens,
+            consumedTokens: 0,
+            reservedTokens: 0,
+          },
+        },
+        allocationLimit: {
+          create: {
+            monthlyMaxAllocation: 25000,
+            singleTxLimit: 10000,
+          },
+        },
+      },
+      include: {
+        metadata: true,
+        tokenBalance: true,
+      },
+    });
+
+    // Record initial allocation ledger entry if tokens provided
+    let tokenTransaction = null;
+    if (initialTokens > 0) {
+      tokenTransaction = await tx.tokenTransaction.create({
+        data: {
+          organisationId: org.id,
+          actorId: params.actorUserId,
+          type: TokenTransactionType.ALLOCATION,
+          amount: initialTokens,
+          balanceBefore: 0,
+          balanceAfter: initialTokens,
+          reason: params.tokenTransactionReason || 'Initial platform allocation upon organisation creation',
+          metadata: params.tokenTransactionMetadata || { createdByPlatformSuperAdmin: true },
+        },
+      });
+    }
+
+    // Create the initial Organisation Super Admin user with mustChangePassword: true
+    const superAdmin = await tx.user.create({
+      data: {
+        email: params.superAdminEmail.toLowerCase().trim(),
+        passwordHash: params.superAdminPasswordHash,
+        firstName: params.superAdminFirstName,
+        lastName: params.superAdminLastName,
+        role: UserRole.ORGANISATION_SUPER_ADMIN,
+        organisationId: org.id,
+        isActive: true,
+        isEmailVerified: true,
+        mustChangePassword: true,
+        orgMemberProfile: {
+          create: {
+            organisationId: org.id,
+            // Full permission set — ORGANISATION_SUPER_ADMIN ceiling
+            permissions: [...ALL_ORG_PERMISSIONS],
+            invitedById: params.actorUserId,
+          },
+        },
+      },
+    });
+
+    return { org, superAdmin, tokenTransaction };
+  }
+
+  /**
    * Creates a new organisation at platform level with initial ledger balances
    * and the initial Organisation Super Admin account in a single transaction.
+   * Reuses provisionOrganisationCore.
    */
   async create(dto: CreateOrganisationDto, actor: AuthenticatedUser, ipAddress?: string, userAgent?: string) {
     // ── pre-flight uniqueness checks ────────────────────────────
@@ -553,84 +680,26 @@ export class PlatformOrganisationService {
 
     // ── atomic transaction ──────────────────────────────────────
     const { org, superAdmin } = await this.prisma.$transaction(async (tx) => {
-      const org = await tx.organisation.create({
-        data: {
-          name: dto.name,
-          slug: dto.slug,
-          domain: dto.domain || null,
-          contactEmail: dto.contactEmail,
-          contactPhone: dto.contactPhone || null,
-          status: OrganisationStatus.ACTIVE,
-          tier: dto.tier || 'STANDARD',
-          recruiterLimit: dto.recruiterLimit ?? dto.maxRecruiters ?? 25,
-          metadata: {
-            create: {
-              industry: dto.industry || null,
-              companySize: dto.companySize || null,
-              website: dto.website || null,
-            },
-          },
-          tokenBalance: {
-            create: {
-              balance: initialTokens,
-              allocatedTokens: initialTokens,
-              consumedTokens: 0,
-              reservedTokens: 0,
-            },
-          },
-          allocationLimit: {
-            create: {
-              monthlyMaxAllocation: 25000,
-              singleTxLimit: 10000,
-            },
-          },
-        },
-        include: {
-          metadata: true,
-          tokenBalance: true,
-        },
+      return this.provisionOrganisationCore(tx, {
+        name: dto.name,
+        slug: dto.slug,
+        domain: dto.domain || null,
+        contactEmail: dto.contactEmail,
+        contactPhone: dto.contactPhone || null,
+        tier: dto.tier || 'STANDARD',
+        recruiterLimit: dto.recruiterLimit ?? dto.maxRecruiters ?? 25,
+        industry: dto.industry || null,
+        companySize: dto.companySize || null,
+        website: dto.website || null,
+        initialTokens,
+        tokenTransactionReason: 'Initial platform allocation upon organisation creation',
+        tokenTransactionMetadata: { createdByPlatformSuperAdmin: true },
+        superAdminFirstName: firstName,
+        superAdminLastName: lastName,
+        superAdminEmail,
+        superAdminPasswordHash: passwordHash,
+        actorUserId: actor.userId,
       });
-
-      // Record initial allocation ledger entry if tokens provided
-      if (initialTokens > 0) {
-        await tx.tokenTransaction.create({
-          data: {
-            organisationId: org.id,
-            actorId: actor.userId,
-            type: TokenTransactionType.ALLOCATION,
-            amount: initialTokens,
-            balanceBefore: 0,
-            balanceAfter: initialTokens,
-            reason: 'Initial platform allocation upon organisation creation',
-            metadata: { createdByPlatformSuperAdmin: true },
-          },
-        });
-      }
-
-      // Create the initial Organisation Super Admin user with mustChangePassword: true
-      const superAdmin = await tx.user.create({
-        data: {
-          email: superAdminEmail,
-          passwordHash,
-          firstName,
-          lastName,
-          role: UserRole.ORGANISATION_SUPER_ADMIN,
-          organisationId: org.id,
-          isActive: true,
-          isEmailVerified: true,
-          mustChangePassword: true,
-          orgMemberProfile: {
-            create: {
-              organisationId: org.id,
-              // Full permission set — ORGANISATION_SUPER_ADMIN ceiling
-              permissions: [...ALL_ORG_PERMISSIONS],
-              invitedById: actor.userId,
-            },
-          },
-        },
-      });
-
-      return { org, superAdmin };
     });
 
     // ── audit log (NO password data) ────────────────────────────
@@ -664,6 +733,328 @@ export class PlatformOrganisationService {
         status: org.status,
         tier: org.tier,
         tokenBalance: org.tokenBalance?.balance ?? 0,
+        createdAt: org.createdAt,
+      },
+      superAdmin: {
+        id: superAdmin.id,
+        name: `${superAdmin.firstName} ${superAdmin.lastName}`.trim(),
+        email: superAdmin.email,
+        role: superAdmin.role,
+      },
+    };
+  }
+
+  /**
+   * Provisions an approved OrganisationApplication atomically.
+   * Creates Organisation, Metadata, TokenBalance, AllocationLimit,
+   * TokenTransaction (if tokens > 0), Super Admin User, OrgMemberProfile,
+   * links createdOrganisationId, updates application status to APPROVED,
+   * records review history, and emits audit logs in a single transaction.
+   *
+   * Idempotent: If application is already provisioned, returns existing organisation safely.
+   */
+  async provisionApprovedApplication(
+    applicationId: string,
+    actor: AuthenticatedUser,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    const application = await this.prisma.organisationApplication.findUnique({
+      where: { id: applicationId },
+      include: {
+        selectedPlan: true,
+        createdOrganisation: {
+          include: {
+            tokenBalance: true,
+          },
+        },
+      },
+    });
+
+    if (!application) {
+      throw new NotFoundException(`Organisation application with ID '${applicationId}' not found`);
+    }
+
+    // ── Idempotency Check ──────────────────────────────────────
+    if (application.createdOrganisationId) {
+      const existingOrg =
+        application.createdOrganisation ||
+        (await this.prisma.organisation.findUnique({
+          where: { id: application.createdOrganisationId },
+          include: { tokenBalance: true },
+        }));
+
+      const existingSuperAdmin = await this.prisma.user.findFirst({
+        where: {
+          organisationId: application.createdOrganisationId,
+          role: UserRole.ORGANISATION_SUPER_ADMIN,
+        },
+      });
+
+      return {
+        id: application.id,
+        applicationNumber: application.applicationNumber,
+        status: application.status,
+        reviewedAt: application.reviewedAt,
+        createdOrganisationId: application.createdOrganisationId,
+        isAlreadyProvisioned: true,
+        message: 'Organisation application is already provisioned.',
+        organisation: existingOrg
+          ? {
+              id: existingOrg.id,
+              name: existingOrg.name,
+              slug: existingOrg.slug,
+              domain: existingOrg.domain,
+              contactEmail: existingOrg.contactEmail,
+              status: existingOrg.status,
+              tier: existingOrg.tier,
+              tokenBalance: existingOrg.tokenBalance?.balance ?? 0,
+              createdAt: existingOrg.createdAt,
+            }
+          : null,
+        superAdmin: existingSuperAdmin
+          ? {
+              id: existingSuperAdmin.id,
+              name: `${existingSuperAdmin.firstName} ${existingSuperAdmin.lastName}`.trim(),
+              email: existingSuperAdmin.email,
+              role: existingSuperAdmin.role,
+            }
+          : null,
+      };
+    }
+
+    // ── Status Validation ──────────────────────────────────────
+    if (application.status === OrgApplicationStatus.REJECTED) {
+      throw new BadRequestException('Cannot approve or provision an application that has been rejected.');
+    }
+
+    if (
+      application.status !== OrgApplicationStatus.PENDING_REVIEW &&
+      application.status !== OrgApplicationStatus.MORE_INFO_REQUESTED &&
+      application.status !== OrgApplicationStatus.APPROVED
+    ) {
+      throw new BadRequestException(
+        `Cannot approve application in status '${application.status}'. Only reviewable applications can be approved.`,
+      );
+    }
+
+    // ── Pre-flight Uniqueness Checks ───────────────────────────
+    const existingSlug = await this.prisma.organisation.findUnique({
+      where: { slug: application.slug },
+    });
+    if (existingSlug && existingSlug.id !== application.createdOrganisationId) {
+      throw new ConflictException(
+        `An organisation with slug '${application.slug}' already exists. Cannot provision duplicate organisation.`,
+      );
+    }
+
+    if (application.domain) {
+      const existingDomain = await this.prisma.organisation.findUnique({
+        where: { domain: application.domain },
+      });
+      if (existingDomain && existingDomain.id !== application.createdOrganisationId) {
+        throw new ConflictException(
+          `An organisation with domain '${application.domain}' already exists. Cannot provision duplicate domain.`,
+        );
+      }
+    }
+
+    const superAdminEmail = application.ownerEmail.toLowerCase().trim();
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: superAdminEmail },
+    });
+    if (existingUser) {
+      throw new ConflictException(
+        `A user with email '${application.ownerEmail}' already exists. Cannot create Organisation Super Admin account.`,
+      );
+    }
+
+    // ── Authoritative Plan / Token Resolution ───────────────────
+    let initialTokens = 0;
+    let planName = 'Default';
+    let planCode = 'NONE';
+
+    if (application.selectedPlanId) {
+      const plan = await this.prisma.tokenPlan.findUnique({
+        where: { id: application.selectedPlanId },
+      });
+      if (!plan) {
+        throw new BadRequestException(
+          `Selected plan with ID '${application.selectedPlanId}' was not found.`,
+        );
+      }
+      if (!plan.isActive) {
+        throw new BadRequestException(
+          `Selected plan '${plan.name}' is inactive.`,
+        );
+      }
+      planName = plan.name;
+      planCode = plan.code;
+
+      // Business Rule:
+      // Payment proof screenshot or paymentReference is NOT automatic payment verification.
+      // Free plans (priceCents === 0) or explicitly VERIFIED payments allocate tokens.
+      // Unverified paid plans (paymentStatus !== VERIFIED) allocate 0 initial tokens.
+      if (plan.priceCents === 0 || application.paymentStatus === ApplicationPaymentStatus.VERIFIED) {
+        initialTokens = plan.tokenAmount;
+      } else {
+        initialTokens = 0;
+      }
+    }
+
+    // ── Generate Cryptographic Temporary Password ───────────────
+    const tempPassword = this.generateTemporaryPassword();
+    const passwordHash = await bcrypt.hash(tempPassword, 12);
+
+    const now = new Date();
+
+    // ── Single Atomic Database Transaction ──────────────────────
+    const { org, superAdmin, updatedApp } = await this.prisma.$transaction(async (tx) => {
+      // 1. Optimistic Concurrency Lock: update status where createdOrganisationId is null
+      const updateResult = await tx.organisationApplication.updateMany({
+        where: {
+          id: application.id,
+          createdOrganisationId: null,
+          status: {
+            in: [
+              OrgApplicationStatus.PENDING_REVIEW,
+              OrgApplicationStatus.MORE_INFO_REQUESTED,
+              OrgApplicationStatus.APPROVED,
+            ],
+          },
+        },
+        data: {
+          status: OrgApplicationStatus.APPROVED,
+          reviewedByUserId: actor.userId,
+          reviewedAt: now,
+        },
+      });
+
+      if (updateResult.count === 0) {
+        throw new ConflictException(
+          'Application was already provisioned or modified concurrently by another administrator.',
+        );
+      }
+
+      // 2. Provision core models using reusable transactional core
+      const { org, superAdmin } = await this.provisionOrganisationCore(tx, {
+        name: application.name,
+        slug: application.slug,
+        domain: application.domain,
+        contactEmail: application.contactEmail,
+        contactPhone: application.contactPhone,
+        tier: 'STANDARD',
+        recruiterLimit: 25,
+        industry: application.industry,
+        companySize: application.companySize,
+        website: application.website,
+        address: application.address,
+        billingDetails: {
+          ownerDesignation: application.ownerDesignation || null,
+          ownerPhone: application.ownerPhone || null,
+          paymentMethod: application.paymentMethod || null,
+          paymentReference: application.paymentReference || null,
+          paymentStatus: application.paymentStatus,
+        },
+        initialTokens,
+        tokenTransactionReason: `Initial platform allocation upon application approval (Plan: ${planName})`,
+        tokenTransactionMetadata: {
+          planId: application.selectedPlanId,
+          planCode,
+          applicationId: application.id,
+          applicationNumber: application.applicationNumber,
+        },
+        superAdminFirstName: application.ownerFirstName,
+        superAdminLastName: application.ownerLastName,
+        superAdminEmail,
+        superAdminPasswordHash: passwordHash,
+        actorUserId: actor.userId,
+      });
+
+      // 3. Link application to newly created organisation
+      const updatedApp = await tx.organisationApplication.update({
+        where: { id: application.id },
+        data: { createdOrganisationId: org.id },
+      });
+
+      // 4. Record ApplicationReviewHistory
+      await tx.applicationReviewHistory.create({
+        data: {
+          applicationId: application.id,
+          actorId: actor.userId,
+          actorRole: actor.role,
+          action: ApplicationReviewAction.APPROVED,
+          notes: 'Application approved and organisation provisioned.',
+          metadata: {
+            organisationId: org.id,
+            organisationSlug: org.slug,
+            planId: application.selectedPlanId,
+            initialTokens,
+            adminEmail: actor.email,
+            previousStatus: application.status,
+          },
+        },
+      });
+
+      return { org, superAdmin, updatedApp };
+    });
+
+    // ── Audit Logs (outside transaction) ────────────────────────
+    await this.auditService.record({
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: 'ORGANISATION_CREATED',
+      entityType: 'ORGANISATION',
+      entityId: org.id,
+      organisationId: org.id,
+      metadata: {
+        name: org.name,
+        slug: org.slug,
+        initialTokens,
+        superAdminId: superAdmin.id,
+        superAdminEmail: superAdmin.email,
+        applicationId: application.id,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    await this.auditService.record({
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: 'ORGANISATION_APPLICATION_APPROVED',
+      entityType: 'ORGANISATION_APPLICATION',
+      entityId: application.id,
+      metadata: {
+        applicationNumber: application.applicationNumber,
+        organisationName: application.name,
+        createdOrganisationId: org.id,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    this.logger.log(
+      `App ${application.id} approved & Org ${org.id} (${org.slug}) provisioned by Admin ${actor.userId}`,
+    );
+
+    // ── Response (Strictly NO password or token secrets returned) ─
+    return {
+      id: updatedApp.id,
+      applicationNumber: updatedApp.applicationNumber,
+      status: updatedApp.status,
+      reviewedAt: updatedApp.reviewedAt,
+      createdOrganisationId: org.id,
+      message: 'Organisation application approved and provisioned successfully.',
+      organisation: {
+        id: org.id,
+        name: org.name,
+        slug: org.slug,
+        domain: org.domain,
+        contactEmail: org.contactEmail,
+        status: org.status,
+        tier: org.tier,
+        tokenBalance: org.tokenBalance?.balance ?? initialTokens,
         createdAt: org.createdAt,
       },
       superAdmin: {
