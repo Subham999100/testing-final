@@ -1,0 +1,33 @@
+/* Organisation portal — light theme overrides scoped to the portal. */
+
+.org-portal,
+.org-auth {
+  color-scheme: light;
+  background-color: #f8fafc;
+  color: #1e293b;
+}
+
+.org-portal ::-webkit-scrollbar-track,
+.org-auth ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.org-portal ::-webkit-scrollbar-thumb,
+.org-auth ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+
+.org-portal ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@media print {
+  .org-portal aside,
+  .org-portal header,
+  .no-print {
+    display: none !important;
+  }
+  .org-portal main {
+    overflow: visible !important;
+  }
+}

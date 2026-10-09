@@ -1,0 +1,31 @@
+:root {
+  --color-primary: #E8630A;
+  --color-primary-hover: #cf5400;
+  --color-accent: #E8630A;
+  --color-accent-soft: rgba(232, 99, 10, 0.12);
+  --color-background: #FAF7F2;
+  --color-surface: #FFFDF9;
+  --color-surface-alt: #F2E9E0;
+  --color-surface-strong: #F7E7D9;
+  --color-text: #171614;
+  --color-text-secondary: #62564E;
+  --color-border: #E5D9CF;
+  --color-border-strong: #D7C7B8;
+  --color-success: #1d7d4d;
+  --color-error: #b63a2d;
+  --color-footer: #171614;
+  /* Shared accessible action shade for small white button labels. */
+  --color-action: #bc4b00;
+  --color-action-hover: #a84000;
+  --color-on-action: #ffffff;
+  --color-success-soft: #e6f1e8;
+  --color-error-soft: #f9e9e5;
+  --color-warning: #855517;
+  --color-warning-soft: #f9eed8;
+  --color-overlay: rgba(23, 22, 20, 0.55);
+  --font-sans: 'DM Sans', 'Segoe UI', sans-serif;
+  --font-heading: 'Fraunces', Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+  --radius-card: 16px;
+  --shadow-soft: none;
+}
