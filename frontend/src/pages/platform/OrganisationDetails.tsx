@@ -56,7 +56,7 @@ export function OrganisationDetails() {
       </Link>
 
       {/* Actions: only use routes that actually exist */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {can('platform.organisations.update') && (
           <Action
             title="Edit information"
@@ -76,14 +76,14 @@ export function OrganisationDetails() {
               },
             ]}
           />
-        )}{' '}
+        )}
         {can('platform.organisations.suspend') && org.status === 'ACTIVE' && (
           <Action
             title="Suspend"
             path={`organisations/${id}/suspend`}
             fields={[{ ...reason, minLength: 10 }]}
           />
-        )}{' '}
+        )}
         {can('platform.organisations.reactivate') && org.status === 'SUSPENDED' && (
           <Action title="Reactivate" path={`organisations/${id}/activate`} />
         )}

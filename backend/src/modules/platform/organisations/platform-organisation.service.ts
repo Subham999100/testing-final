@@ -28,6 +28,10 @@ import { UpdateOrganisationDto } from './dto/update-organisation.dto';
 import { SuspendOrganisationDto } from './dto/suspend-organisation.dto';
 import { QueryOrganisationDto } from './dto/query-organisation.dto';
 import { TransferSuperAdminDto } from './dto/transfer-super-admin.dto';
+import { ProvisionApplicationDto } from './dto/provision-application.dto';
+
+import { ConfigService } from '@nestjs/config';
+import { EmailService } from '../../../integrations/email/email.service';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import {
   Prisma,
@@ -70,6 +74,8 @@ export class PlatformOrganisationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly emailService: EmailService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -755,11 +761,28 @@ export class PlatformOrganisationService {
    */
   async provisionApprovedApplication(
     applicationId: string,
-    actor: AuthenticatedUser,
+    dtoOrActor?: ProvisionApplicationDto | AuthenticatedUser,
+    actorOrIp?: AuthenticatedUser | string,
     ipAddress?: string,
     userAgent?: string,
   ) {
+    let dto: ProvisionApplicationDto | undefined;
+    let actor: AuthenticatedUser | undefined;
+    let ip: string | undefined = ipAddress;
+    let ua: string | undefined = userAgent;
+
+    if (dtoOrActor && 'userId' in dtoOrActor) {
+      actor = dtoOrActor as AuthenticatedUser;
+      ip = actorOrIp as string | undefined;
+      ua = ipAddress;
+      dto = undefined;
+    } else {
+      dto = dtoOrActor as ProvisionApplicationDto | undefined;
+      actor = actorOrIp as AuthenticatedUser | undefined;
+    }
+
     const application = await this.prisma.organisationApplication.findUnique({
+
       where: { id: applicationId },
       include: {
         selectedPlan: true,
@@ -838,13 +861,18 @@ export class PlatformOrganisationService {
       );
     }
 
+    const targetName = dto?.name?.trim() || application.name;
+    const targetSlug = dto?.slug?.trim() || application.slug;
+    const superAdminEmail = (dto?.ownerEmail?.trim() || application.ownerEmail).toLowerCase();
+    const recruiterLimit = (dto?.recruiterLimit && dto.recruiterLimit > 0) ? dto.recruiterLimit : 25;
+
     // ── Pre-flight Uniqueness Checks ───────────────────────────
     const existingSlug = await this.prisma.organisation.findUnique({
-      where: { slug: application.slug },
+      where: { slug: targetSlug },
     });
     if (existingSlug && existingSlug.id !== application.createdOrganisationId) {
       throw new ConflictException(
-        `An organisation with slug '${application.slug}' already exists. Cannot provision duplicate organisation.`,
+        `An organisation with slug '${targetSlug}' already exists. Cannot provision duplicate organisation.`,
       );
     }
 
@@ -859,13 +887,12 @@ export class PlatformOrganisationService {
       }
     }
 
-    const superAdminEmail = application.ownerEmail.toLowerCase().trim();
     const existingUser = await this.prisma.user.findUnique({
       where: { email: superAdminEmail },
     });
     if (existingUser) {
       throw new ConflictException(
-        `A user with email '${application.ownerEmail}' already exists. Cannot create Organisation Super Admin account.`,
+        `A user with email '${superAdminEmail}' already exists. Cannot create Organisation Super Admin account.`,
       );
     }
 
@@ -892,7 +919,6 @@ export class PlatformOrganisationService {
       planCode = plan.code;
 
       // Business Rule:
-      // Payment proof screenshot or paymentReference is NOT automatic payment verification.
       // Free plans (priceCents === 0) or explicitly VERIFIED payments allocate tokens.
       // Unverified paid plans (paymentStatus !== VERIFIED) allocate 0 initial tokens.
       if (plan.priceCents === 0 || application.paymentStatus === ApplicationPaymentStatus.VERIFIED) {
@@ -902,14 +928,19 @@ export class PlatformOrganisationService {
       }
     }
 
+    if (dto?.initialTokens !== undefined && dto.initialTokens >= 0) {
+      initialTokens = dto.initialTokens;
+    }
+
     // ── Generate Cryptographic Temporary Password ───────────────
     const tempPassword = this.generateTemporaryPassword();
     const passwordHash = await bcrypt.hash(tempPassword, 12);
 
     const now = new Date();
+    const actorUserId = actor?.userId || 'SYSTEM';
 
     // ── Single Atomic Database Transaction ──────────────────────
-    const { org, superAdmin, updatedApp } = await this.prisma.$transaction(async (tx) => {
+    const { org, superAdmin, updatedApp, inviteRawToken } = await this.prisma.$transaction(async (tx) => {
       // 1. Optimistic Concurrency Lock: update status where createdOrganisationId is null
       const updateResult = await tx.organisationApplication.updateMany({
         where: {
@@ -925,7 +956,7 @@ export class PlatformOrganisationService {
         },
         data: {
           status: OrgApplicationStatus.APPROVED,
-          reviewedByUserId: actor.userId,
+          reviewedByUserId: actor?.userId || null,
           reviewedAt: now,
         },
       });
@@ -938,13 +969,13 @@ export class PlatformOrganisationService {
 
       // 2. Provision core models using reusable transactional core
       const { org, superAdmin } = await this.provisionOrganisationCore(tx, {
-        name: application.name,
-        slug: application.slug,
+        name: targetName,
+        slug: targetSlug,
         domain: application.domain,
         contactEmail: application.contactEmail,
         contactPhone: application.contactPhone,
         tier: 'STANDARD',
-        recruiterLimit: 25,
+        recruiterLimit,
         industry: application.industry,
         companySize: application.companySize,
         website: application.website,
@@ -968,8 +999,9 @@ export class PlatformOrganisationService {
         superAdminLastName: application.ownerLastName,
         superAdminEmail,
         superAdminPasswordHash: passwordHash,
-        actorUserId: actor.userId,
+        actorUserId,
       });
+
 
       // 3. Link application to newly created organisation
       const updatedApp = await tx.organisationApplication.update({
@@ -996,8 +1028,51 @@ export class PlatformOrganisationService {
         },
       });
 
-      return { org, superAdmin, updatedApp };
+      // 5. Generate secure single-use onboarding token for initial Super Admin
+      const inviteRawToken = crypto.randomBytes(32).toString('hex');
+      const inviteTokenHash = crypto.createHash('sha256').update(inviteRawToken).digest('hex');
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+      await tx.orgInvitation.upsert({
+        where: { tokenHash: inviteTokenHash },
+        create: {
+          organisationId: org.id,
+          email: superAdminEmail,
+          role: UserRole.ORGANISATION_SUPER_ADMIN,
+          permissions: ALL_ORG_PERMISSIONS,
+          tokenHash: inviteTokenHash,
+          status: 'PENDING',
+          expiresAt,
+          invitedById: actorUserId,
+        },
+        update: {
+          tokenHash: inviteTokenHash,
+          status: 'PENDING',
+          expiresAt,
+        },
+      });
+
+      return { org, superAdmin, updatedApp, inviteRawToken };
     });
+
+    // ── Onboarding Email Delivery ──────────────────────────────
+    const smtpHost = this.configService.get<string>('SMTP_HOST');
+    const isEmailConfigured = !!(smtpHost && smtpHost.trim() !== '');
+
+    let emailSent = false;
+    if (isEmailConfigured) {
+      const appUrl = this.configService.get<string>('APP_URL') || 'http://localhost:3000';
+      const setupUrl = `${appUrl}/org/accept-invitation?token=${inviteRawToken}`;
+      try {
+        emailSent = await this.emailService.sendMail({
+          to: superAdminEmail,
+          subject: `Setup your Super Admin account for ${targetName}`,
+          html: `<p>Welcome to Clyptus Job Portal!</p><p>You have been provisioned as Organisation Super Admin for <strong>${targetName}</strong>.</p><p><a href="${setupUrl}">Click here to setup your password and activate your account</a>.</p>`,
+        });
+      } catch (err: any) {
+        this.logger.error(`Failed to dispatch onboarding email to ${superAdminEmail}: ${err.message}`);
+      }
+    }
 
     // ── Audit Logs (outside transaction) ────────────────────────
     await this.auditService.record({
@@ -1038,7 +1113,7 @@ export class PlatformOrganisationService {
       `App ${application.id} approved & Org ${org.id} (${org.slug}) provisioned by Admin ${actor.userId}`,
     );
 
-    // ── Response (Strictly NO password or token secrets returned) ─
+    // ── Response (Strictly NO plaintext password returned) ────────
     return {
       id: updatedApp.id,
       applicationNumber: updatedApp.applicationNumber,
@@ -1062,6 +1137,16 @@ export class PlatformOrganisationService {
         name: `${superAdmin.firstName} ${superAdmin.lastName}`.trim(),
         email: superAdmin.email,
         role: superAdmin.role,
+      },
+      onboarding: {
+        email: superAdminEmail,
+        emailDelivery: {
+          configured: isEmailConfigured,
+          sent: emailSent,
+          message: isEmailConfigured
+            ? (emailSent ? 'Password setup link emailed to Super Admin.' : 'Email service returned failure status.')
+            : 'SMTP_HOST email delivery service is not configured on this server. Single-use onboarding token created in database.',
+        },
       },
     };
   }

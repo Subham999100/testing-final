@@ -10,6 +10,11 @@ export const PlatformPermissions = {
   ORGANISATIONS_UPDATE: 'platform.organisations.update',
   ORGANISATIONS_SUSPEND: 'platform.organisations.suspend',
   ORGANISATIONS_DELETE: 'platform.organisations.delete',
+  ORGANISATIONS_VERIFY: 'platform.organisations.verify',
+  ORGANISATIONS_REJECT: 'platform.organisations.reject',
+
+  // User Accounts
+  USERS_READ: 'platform.users.read',
 
   // Platform Admin Management
   ADMINS_READ: 'platform.admins.read',
@@ -40,9 +45,12 @@ export const PlatformPermissions = {
   // Platform Support Case Management
   SUPPORT_READ: 'platform.support.read',
   SUPPORT_MANAGE: 'platform.support.manage',
+  SUPPORT_ESCALATE: 'platform.support.escalate',
 
   // Platform Reports & Analytics
   REPORTS_READ: 'platform.reports.read',
+  REPORTS_GENERATE: 'platform.reports.generate',
+  REPORTS_EXPORT: 'platform.reports.export',
 
   // Platform Notifications
   NOTIFICATIONS_READ: 'platform.notifications.read',

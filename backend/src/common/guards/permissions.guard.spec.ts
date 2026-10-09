@@ -58,6 +58,22 @@ describe('PermissionsGuard', () => {
     expect(guard.canActivate(context)).toBe(true);
   });
 
+  it('should allow PLATFORM_ADMIN if any one of multiple required permissions is assigned', () => {
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([
+      PlatformPermissions.REPORTS_READ,
+      PlatformPermissions.REPORTS_GENERATE,
+      PlatformPermissions.REPORTS_EXPORT,
+    ]);
+
+    const context = createMockContext({
+      userId: 'usr_admin_2',
+      role: UserRole.PLATFORM_ADMIN,
+      permissions: [PlatformPermissions.REPORTS_GENERATE],
+    });
+
+    expect(guard.canActivate(context)).toBe(true);
+  });
+
   it('should reject PLATFORM_ADMIN if required permission is missing', () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([PlatformPermissions.ORGANISATIONS_SUSPEND]);
 

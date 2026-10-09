@@ -43,11 +43,11 @@ export class PermissionsGuard implements CanActivate {
     // Platform Admin must have explicit permissions
     if (user.role === UserRole.PLATFORM_ADMIN) {
       const userPermissions = user.permissions || [];
-      const hasAll = requiredPermissions.every((perm) =>
+      const hasAny = requiredPermissions.some((perm) =>
         userPermissions.includes(perm),
       );
 
-      if (!hasAll) {
+      if (!hasAny) {
         throw new ForbiddenException(
           `Access denied: Missing required permission(s) [${requiredPermissions.join(', ')}]`,
         );

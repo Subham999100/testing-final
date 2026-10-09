@@ -30,37 +30,61 @@ export class PlatformReportsController {
   constructor(private readonly reportsService: PlatformReportsService) {}
 
   @Get('overview')
-  @RequirePermissions(PlatformPermissions.REPORTS_READ)
+  @RequirePermissions(
+    PlatformPermissions.REPORTS_READ,
+    PlatformPermissions.REPORTS_GENERATE,
+    PlatformPermissions.REPORTS_EXPORT,
+  )
   async getOverview(@Query() query: QueryReportDto) {
     return this.reportsService.getOverview(query);
   }
 
   @Get('organisations')
-  @RequirePermissions(PlatformPermissions.REPORTS_READ)
+  @RequirePermissions(
+    PlatformPermissions.REPORTS_READ,
+    PlatformPermissions.REPORTS_GENERATE,
+    PlatformPermissions.REPORTS_EXPORT,
+  )
   async getOrganisationsReport(@Query() query: QueryReportDto) {
     return this.reportsService.getOrganisationsReport(query);
   }
 
   @Get('users')
-  @RequirePermissions(PlatformPermissions.REPORTS_READ)
+  @RequirePermissions(
+    PlatformPermissions.REPORTS_READ,
+    PlatformPermissions.REPORTS_GENERATE,
+    PlatformPermissions.REPORTS_EXPORT,
+  )
   async getUsersReport(@Query() query: QueryReportDto) {
     return this.reportsService.getUsersReport(query);
   }
 
   @Get('jobs')
-  @RequirePermissions(PlatformPermissions.REPORTS_READ)
+  @RequirePermissions(
+    PlatformPermissions.REPORTS_READ,
+    PlatformPermissions.REPORTS_GENERATE,
+    PlatformPermissions.REPORTS_EXPORT,
+  )
   async getJobsReport(@Query() query: QueryReportDto) {
     return this.reportsService.getJobsReport(query);
   }
 
   @Get('applications')
-  @RequirePermissions(PlatformPermissions.REPORTS_READ)
+  @RequirePermissions(
+    PlatformPermissions.REPORTS_READ,
+    PlatformPermissions.REPORTS_GENERATE,
+    PlatformPermissions.REPORTS_EXPORT,
+  )
   async getApplicationsReport(@Query() query: QueryReportDto) {
     return this.reportsService.getApplicationsReport(query);
   }
 
   @Get('export')
-  @RequirePermissions(PlatformPermissions.REPORTS_READ)
+  @RequirePermissions(
+    PlatformPermissions.REPORTS_READ,
+    PlatformPermissions.REPORTS_GENERATE,
+    PlatformPermissions.REPORTS_EXPORT,
+  )
   @Header('Content-Type', 'text/csv')
   async exportCsv(@Query() query: QueryReportDto, @Res() res: Response) {
     const csvData = await this.reportsService.exportCsv(query);

@@ -21,7 +21,6 @@ export class PlatformDashboardController {
   constructor(private readonly dashboardService: PlatformDashboardService) {}
 
   @Get()
-  @RequirePermissions(PlatformPermissions.ANALYTICS_READ)
   async getDashboardSummary() {
     return this.dashboardService.getDashboardSummary();
   }

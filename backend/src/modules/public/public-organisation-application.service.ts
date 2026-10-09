@@ -267,14 +267,14 @@ export class PublicOrganisationApplicationService {
   /**
    * Verifies the applicant's continuation authorization token for an application ID.
    */
-  verifyContinuationToken(applicationId: string, authHeader?: string): ContinuationTokenPayload {
-    if (!authHeader || typeof authHeader !== 'string') {
+  verifyContinuationToken(applicationId: string, tokenHeader?: string): ContinuationTokenPayload {
+    if (!tokenHeader || typeof tokenHeader !== 'string') {
       throw new UnauthorizedException('Continuation token is required to upload application documents');
     }
 
-    const [scheme, token] = authHeader.split(' ');
-    if (scheme !== 'Bearer' || !token) {
-      throw new UnauthorizedException('Invalid continuation token format');
+    let token = tokenHeader.trim();
+    if (token.toLowerCase().startsWith('bearer ')) {
+      token = token.slice(7).trim();
     }
 
     try {

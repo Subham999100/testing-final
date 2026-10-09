@@ -17,10 +17,21 @@ export function PermissionMatrix({
     selected.includes(p.key)
   ).length;
 
-  const filteredPermissions = AVAILABLE_PERMISSIONS.filter((p) =>
-    p.label.toLowerCase().includes(search.toLowerCase()) ||
-    p.key.toLowerCase().includes(search.toLowerCase())
-  );
+  const normalizedSearch = search.trim().toLowerCase();
+
+  const filteredPermissions = AVAILABLE_PERMISSIONS.filter((p) => {
+    if (!normalizedSearch) return true;
+    const domainKey = p.key.split(".")[1] || "";
+    const groupName = (permissionGroups[domainKey] || "").toLowerCase();
+    const label = p.label.toLowerCase();
+    const key = p.key.toLowerCase();
+
+    return (
+      label.includes(normalizedSearch) ||
+      key.includes(normalizedSearch) ||
+      groupName.includes(normalizedSearch)
+    );
+  });
 
   const domainKeys = Object.keys(permissionGroups);
 
@@ -184,7 +195,7 @@ export function PermissionMatrix({
               {filteredPermissions.length === 0 && (
                 <tr>
                   <td colSpan={domainKeys.length + 1} className="py-8 text-center text-muted text-xs">
-                    No matching permissions found for "{search}".
+                    No matching permissions found for "{search.trim()}".
                   </td>
                 </tr>
               )}

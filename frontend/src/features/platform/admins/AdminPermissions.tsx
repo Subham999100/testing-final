@@ -123,11 +123,17 @@ export function AdminPermissions({ admin, onSaved }: AdminPermissionsProps) {
 
   // Group assigned permissions by domain category
   const groupedAssigned = useMemo(() => {
+    const term = search.trim().toLowerCase();
     const filtered = currentPermissions.filter((key) => {
-      if (!search.trim()) return true;
-      const term = search.toLowerCase();
+      if (!term) return true;
+      const domainKey = key.split(".")[1] || "";
+      const groupName = (permissionGroups[domainKey] || "").toLowerCase();
       const label = permissionLabel(key).toLowerCase();
-      return label.includes(term) || key.toLowerCase().includes(term);
+      return (
+        label.includes(term) ||
+        key.toLowerCase().includes(term) ||
+        groupName.includes(term)
+      );
     });
 
     const groups: { domainKey: string; title: string; perms: string[] }[] = [];
@@ -422,10 +428,10 @@ export function AdminPermissions({ admin, onSaved }: AdminPermissionsProps) {
                         Assign Permissions
                       </button>
                     </div>
-                  ) : groupedAssigned.length === 0 && search ? (
+                  ) : groupedAssigned.length === 0 && search.trim() ? (
                     /* Search with no matches */
                     <div className="py-8 text-center text-xs text-muted">
-                      No assigned permissions match &quot;{search}&quot;.
+                      No assigned permissions match &quot;{search.trim()}&quot;.
                     </div>
                   ) : (
                     /* Categorized Assigned Permissions */
