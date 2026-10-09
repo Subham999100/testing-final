@@ -145,7 +145,8 @@ describe('VerificationDetailModal & Review Actions', () => {
   });
 
   it('opens and confirms Approve Application dialog', async () => {
-    (OrganisationApplicationService.getApplicationById as any).mockResolvedValueOnce(mockDetail);
+    (OrganisationApplicationService.getApplicationById as any).mockResolvedValue(mockDetail);
+
     (OrganisationApplicationService.approveApplication as any).mockResolvedValueOnce({
       applicationId: 'app_full_1',
       status: 'APPROVED',
@@ -173,13 +174,22 @@ describe('VerificationDetailModal & Review Actions', () => {
     fireEvent.click(confirmApproveBtn);
 
     await waitFor(() => {
-      expect(OrganisationApplicationService.approveApplication).toHaveBeenCalledWith('app_full_1');
+      expect(OrganisationApplicationService.approveApplication).toHaveBeenCalledWith(
+        'app_full_1',
+        expect.objectContaining({
+          name: 'Wayne Enterprises',
+          slug: 'wayne-enterprises',
+          ownerEmail: 'bruce@wayne.corp',
+        }),
+      );
       expect(onRefreshQueue).toHaveBeenCalled();
     });
+
   });
 
   it('handles HTTP 409 conflict during Approve action and shows refresh notice', async () => {
-    (OrganisationApplicationService.getApplicationById as any).mockResolvedValueOnce(mockDetail);
+    (OrganisationApplicationService.getApplicationById as any).mockResolvedValue(mockDetail);
+
     const conflictError: any = new Error('Application status has already been updated');
     conflictError.status = 409;
     (OrganisationApplicationService.approveApplication as any).mockRejectedValueOnce(conflictError);

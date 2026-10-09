@@ -76,7 +76,13 @@ export class PublicOrganisationApplicationController {
     @Body() dto: UploadApplicationDocumentDto,
     @UploadedFile() file: UploadedFileObject,
     @Headers('authorization') authHeader?: string,
+    @Headers('x-continuation-token') continuationHeader?: string,
   ) {
-    return this.applicationService.uploadDocument(id, dto, file, authHeader);
+    return this.applicationService.uploadDocument(
+      id,
+      dto,
+      file,
+      authHeader || continuationHeader,
+    );
   }
 }

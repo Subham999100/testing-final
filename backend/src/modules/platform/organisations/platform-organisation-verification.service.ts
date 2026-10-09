@@ -28,6 +28,8 @@ import {
   ApplicationReviewAction,
 } from '@prisma/client';
 import { PlatformOrganisationService } from './platform-organisation.service';
+import { ProvisionApplicationDto } from './dto/provision-application.dto';
+
 
 @Injectable()
 export class PlatformOrganisationVerificationService {
@@ -537,10 +539,28 @@ export class PlatformOrganisationVerificationService {
    */
   async approve(
     id: string,
-    actor: AuthenticatedUser,
+    dtoOrActor?: ProvisionApplicationDto | AuthenticatedUser,
+    actorOrIp?: AuthenticatedUser | string,
     ipAddress?: string,
     userAgent?: string,
   ) {
-    return this.platformOrgService.provisionApprovedApplication(id, actor, ipAddress, userAgent);
+    let dto: ProvisionApplicationDto | undefined;
+    let actor: AuthenticatedUser;
+    let ip: string | undefined = ipAddress;
+    let ua: string | undefined = userAgent;
+
+    if (dtoOrActor && 'userId' in dtoOrActor) {
+      actor = dtoOrActor as AuthenticatedUser;
+      ip = actorOrIp as string | undefined;
+      ua = ipAddress;
+      dto = undefined;
+    } else {
+      dto = dtoOrActor as ProvisionApplicationDto | undefined;
+      actor = actorOrIp as AuthenticatedUser;
+    }
+
+    return this.platformOrgService.provisionApprovedApplication(id, dto, actor, ip, ua);
   }
 }
+
+

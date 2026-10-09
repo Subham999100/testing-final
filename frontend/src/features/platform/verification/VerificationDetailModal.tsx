@@ -124,7 +124,7 @@ export const VerificationDetailModal: React.FC<Props> = ({
               </div>
               {app && (
                 <p className="text-xs text-muted mt-0.5">
-                  Submitted {new Date(app.submittedAt).toLocaleString()} &middot; Slug:{' '}
+                  Submitted {app.submittedAt && !isNaN(new Date(app.submittedAt).getTime()) ? new Date(app.submittedAt).toLocaleString() : '—'} &middot; Slug:{' '}
                   <code className="font-mono">{app.slug}</code>
                 </p>
               )}
@@ -316,13 +316,19 @@ export const VerificationDetailModal: React.FC<Props> = ({
                           <span className="text-muted">Payment Reference / UTR:</span>{' '}
                           <code className="font-mono font-semibold text-ink">{app.paymentReference || 'None Provided'}</code>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-muted">Verification Status:</span>
-                          <span className={`px-2 py-0.5 rounded font-mono font-semibold text-[11px] ${
-                            app.paymentStatus === 'VERIFIED' ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'
-                          }`}>
-                            {app.paymentStatus}
-                          </span>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-muted">Application Status:</span>
+                            <span className="font-mono font-semibold text-ink text-[11px]">{app.status}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-muted">Payment Status:</span>
+                            <span className={`px-2 py-0.5 rounded font-mono font-semibold text-[11px] ${
+                              app.paymentStatus === 'VERIFIED' ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'
+                            }`}>
+                              {app.paymentStatus}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -521,6 +527,7 @@ export const VerificationDetailModal: React.FC<Props> = ({
           slug={app.slug}
           ownerEmail={app.ownerEmail}
           planName={app.selectedPlan?.name}
+          defaultTokenAllocation={app.selectedPlan?.tokenAmount || 0}
           onClose={() => setShowApprove(false)}
           onSuccess={(result) =>
             handleActionComplete(
@@ -532,3 +539,4 @@ export const VerificationDetailModal: React.FC<Props> = ({
     </div>
   );
 };
+

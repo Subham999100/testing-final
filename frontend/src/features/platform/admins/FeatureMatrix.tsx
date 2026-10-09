@@ -203,15 +203,22 @@ export const FeatureMatrix: React.FC<FeatureMatrixProps> = ({ admins, onSaved, h
 
   // Filter permissions based on search query and group
   const filteredPermissions = useMemo(() => {
+    const term = search.trim().toLowerCase();
     return AVAILABLE_PERMISSIONS.filter((p) => {
       const domain = p.key.split('.')[1] || '';
       const matchesGroup = selectedGroup === 'all' || domain === selectedGroup;
-      const matchesSearch =
-        search === '' ||
-        p.label.toLowerCase().includes(search.toLowerCase()) ||
-        p.key.toLowerCase().includes(search.toLowerCase()) ||
-        (permissionGroups[domain] || '').toLowerCase().includes(search.toLowerCase());
-      return matchesGroup && matchesSearch;
+      if (!matchesGroup) return false;
+      if (!term) return true;
+
+      const label = p.label.toLowerCase();
+      const key = p.key.toLowerCase();
+      const groupName = (permissionGroups[domain] || '').toLowerCase();
+
+      return (
+        label.includes(term) ||
+        key.includes(term) ||
+        groupName.includes(term)
+      );
     });
   }, [search, selectedGroup]);
 
@@ -511,7 +518,7 @@ export const FeatureMatrix: React.FC<FeatureMatrixProps> = ({ admins, onSaved, h
             {Object.keys(groupedFeatures).length === 0 ? (
               <tr>
                 <td colSpan={allColumnsCount} className="py-12 text-center text-muted text-xs">
-                  No features found matching "{search}".
+                  No features found matching "{search.trim()}".
                 </td>
               </tr>
             ) : (

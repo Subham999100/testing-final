@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
 import { AuditService } from '../../audit/audit.service';
+import { ConfigService } from '@nestjs/config';
+import { EmailService } from '../../../integrations/email/email.service';
 import { CloudStorageService } from '../../../integrations/storage/storage.service';
 import { PlatformOrganisationVerificationService } from './platform-organisation-verification.service';
 import { PlatformOrganisationVerificationController } from './platform-organisation-verification.controller';
@@ -170,6 +172,12 @@ describe('Platform Organisation Verification, Review & Provisioning (Milestones 
       tokenTransaction: {
         create: jest.fn(),
       },
+      orgInvitation: {
+        upsert: jest.fn().mockResolvedValue({ id: 'inv_1' }),
+        create: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn(),
+      },
       platformSession: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
@@ -192,6 +200,8 @@ describe('Platform Organisation Verification, Review & Provisioning (Milestones 
         { provide: PrismaService, useValue: prisma },
         { provide: AuditService, useValue: auditService },
         { provide: CloudStorageService, useValue: storageService },
+        { provide: EmailService, useValue: { sendMail: jest.fn().mockResolvedValue(true) } },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(undefined) } },
       ],
     })
       .overrideGuard(JwtAuthGuard)

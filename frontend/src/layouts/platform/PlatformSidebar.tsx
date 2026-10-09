@@ -75,12 +75,6 @@ export const PlatformSidebar: React.FC = () => {
           permission: 'platform.notifications.read',
         },
         {
-          name: 'Moderation',
-          path: '/platform/moderation/jobs',
-          icon: AlertTriangle,
-          permission: 'platform.moderation.read',
-        },
-        {
           name: 'Reports',
           path: '/platform/reports',
           icon: FileText,

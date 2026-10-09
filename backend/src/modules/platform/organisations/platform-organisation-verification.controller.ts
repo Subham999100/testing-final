@@ -40,6 +40,8 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { PlatformPermissions } from '../../../common/constants/permissions.constant';
 
+import { ProvisionApplicationDto } from './dto/provision-application.dto';
+
 @Controller('platform/organisation-applications')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Roles(UserRole.PLATFORM_SUPER_ADMIN, UserRole.PLATFORM_ADMIN)
@@ -53,7 +55,12 @@ export class PlatformOrganisationVerificationController {
    * Verification Queue - Paginated & filterable list of applications.
    */
   @Get()
-  @RequirePermissions(PlatformPermissions.ORGANISATIONS_READ)
+  @RequirePermissions(
+    PlatformPermissions.ORGANISATIONS_READ,
+    PlatformPermissions.ORGANISATIONS_VERIFY,
+    PlatformPermissions.ORGANISATIONS_REJECT,
+    PlatformPermissions.ORGANISATIONS_UPDATE,
+  )
   async findAll(@Query() query: QueryOrganisationApplicationsDto) {
     return this.verificationService.findAll(query);
   }
@@ -63,7 +70,12 @@ export class PlatformOrganisationVerificationController {
    * Application Detail - Complete metadata, owner, plan, payment, review history, and document metadata.
    */
   @Get(':id')
-  @RequirePermissions(PlatformPermissions.ORGANISATIONS_READ)
+  @RequirePermissions(
+    PlatformPermissions.ORGANISATIONS_READ,
+    PlatformPermissions.ORGANISATIONS_VERIFY,
+    PlatformPermissions.ORGANISATIONS_REJECT,
+    PlatformPermissions.ORGANISATIONS_UPDATE,
+  )
   async findOne(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
     return this.verificationService.findOne(id);
   }
@@ -73,7 +85,12 @@ export class PlatformOrganisationVerificationController {
    * Secure Document Retrieval - Streams private file binary with safe headers.
    */
   @Get(':applicationId/documents/:documentId')
-  @RequirePermissions(PlatformPermissions.ORGANISATIONS_READ)
+  @RequirePermissions(
+    PlatformPermissions.ORGANISATIONS_READ,
+    PlatformPermissions.ORGANISATIONS_VERIFY,
+    PlatformPermissions.ORGANISATIONS_REJECT,
+    PlatformPermissions.ORGANISATIONS_UPDATE,
+  )
   async retrieveDocument(
     @Param('applicationId', new ParseUUIDPipe({ version: '4' })) applicationId: string,
     @Param('documentId', new ParseUUIDPipe({ version: '4' })) documentId: string,
@@ -98,7 +115,10 @@ export class PlatformOrganisationVerificationController {
    * Requests additional information from applicant, moving status to MORE_INFO_REQUESTED.
    */
   @Post(':id/request-information')
-  @RequirePermissions(PlatformPermissions.ORGANISATIONS_UPDATE)
+  @RequirePermissions(
+    PlatformPermissions.ORGANISATIONS_VERIFY,
+    PlatformPermissions.ORGANISATIONS_UPDATE,
+  )
   @HttpCode(HttpStatus.OK)
   async requestInformation(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -116,7 +136,10 @@ export class PlatformOrganisationVerificationController {
    * Rejects application with required reason, moving status to REJECTED.
    */
   @Post(':id/reject')
-  @RequirePermissions(PlatformPermissions.ORGANISATIONS_UPDATE)
+  @RequirePermissions(
+    PlatformPermissions.ORGANISATIONS_REJECT,
+    PlatformPermissions.ORGANISATIONS_UPDATE,
+  )
   @HttpCode(HttpStatus.OK)
   async reject(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -136,15 +159,34 @@ export class PlatformOrganisationVerificationController {
    * links createdOrganisationId, and writes audit logs in a single transaction.
    */
   @Post(':id/approve')
-  @RequirePermissions(PlatformPermissions.ORGANISATIONS_UPDATE)
+  @RequirePermissions(
+    PlatformPermissions.ORGANISATIONS_VERIFY,
+    PlatformPermissions.ORGANISATIONS_UPDATE,
+  )
   @HttpCode(HttpStatus.OK)
   async approve(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
-    @CurrentUser() actor: AuthenticatedUser,
-    @Req() req: Request,
+    @Body() dtoOrActor: ProvisionApplicationDto | AuthenticatedUser,
+    @CurrentUser() actorOrReq?: AuthenticatedUser | Request,
+    @Req() req?: Request,
   ) {
-    const ipAddress = (req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress) as string;
-    const userAgent = req.headers['user-agent'];
-    return this.verificationService.approve(id, actor, ipAddress, userAgent);
+    let dto: ProvisionApplicationDto | undefined;
+    let actor: AuthenticatedUser;
+    let requestObj: Request | undefined = req;
+
+    if (dtoOrActor && 'userId' in dtoOrActor) {
+      actor = dtoOrActor as AuthenticatedUser;
+      requestObj = actorOrReq as Request | undefined;
+      dto = undefined;
+    } else {
+      dto = dtoOrActor as ProvisionApplicationDto;
+      actor = actorOrReq as AuthenticatedUser;
+    }
+
+    const ipAddress = (requestObj?.headers?.['x-forwarded-for'] || requestObj?.ip || requestObj?.socket?.remoteAddress) as string;
+    const userAgent = requestObj?.headers?.['user-agent'];
+    return this.verificationService.approve(id, dto, actor, ipAddress, userAgent);
   }
 }
+
+

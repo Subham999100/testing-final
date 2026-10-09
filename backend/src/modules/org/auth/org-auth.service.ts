@@ -252,9 +252,16 @@ export class OrgAuthService {
       throw new BadRequestException('This organisation is not active');
     }
     const existing = await this.prisma.user.findUnique({ where: { email: invitation.email } });
-    if (existing) throw new ConflictException('An account with this email already exists. Contact your administrator.');
+    if (existing) {
+      if (existing.organisationId !== org.id) {
+        throw new ConflictException('An account with this email already exists in another organisation.');
+      }
+      if (!existing.mustChangePassword && existing.role !== invitation.role) {
+        throw new ConflictException('An account with this email already exists. Contact your administrator.');
+      }
+    }
 
-    if (invitation.role === UserRole.RECRUITER) {
+    if (invitation.role === UserRole.RECRUITER && !existing) {
       const recruiters = await this.prisma.orgMemberProfile.count({
         where: { organisationId: org.id, status: 'ACTIVE', user: { role: UserRole.RECRUITER } },
       });
@@ -273,7 +280,22 @@ export class OrgAuthService {
         where: { id: invitation.id, status: 'PENDING' },
         data: { status: 'ACCEPTED', acceptedAt: new Date() },
       });
-      if (!claimed.count) throw new ConflictException('This invitation was already used');
+      if (!claimed.count) throw new ConflictException('This invitation was already used or is expired.');
+
+      if (existing) {
+        const updatedUser = await t.user.update({
+          where: { id: existing.id },
+          data: {
+            passwordHash,
+            mustChangePassword: false,
+            isEmailVerified: true,
+            isActive: true,
+          },
+        });
+        await t.orgInvitation.update({ where: { id: invitation.id }, data: { acceptedUserId: existing.id } });
+        return updatedUser;
+      }
+
       const created = await t.user.create({
         data: {
           email: invitation.email,

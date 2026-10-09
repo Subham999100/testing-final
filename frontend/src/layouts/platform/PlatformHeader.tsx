@@ -3,9 +3,9 @@
 // Reusable by both Platform Super Admin and Platform Admin.
 // ============================================================
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ChevronRight, Search, Bell, Shield } from 'lucide-react';
+import { ChevronRight, Bell } from 'lucide-react';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useResource } from '../../components/platform/OperationsUI';
 
@@ -20,7 +20,6 @@ export const PlatformHeader: React.FC = () => {
     5000,
   );
   const notificationsCount = notifications.data?.unread || 0;
-  const [searchQuery, setSearchQuery] = useState('');
 
   // Breadcrumbs builder
   const pathSnippets = location.pathname.split('/').filter((i) => i);
@@ -29,13 +28,6 @@ export const PlatformHeader: React.FC = () => {
     const formatted = snippet.charAt(0).toUpperCase() + snippet.slice(1).replace(/-/g, ' ');
     return { name: formatted, url };
   });
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/platform/organisations?search=${encodeURIComponent(searchQuery.trim())}`);
-    }
-  };
 
   return (
     <header className="platform-header">
@@ -57,20 +49,8 @@ export const PlatformHeader: React.FC = () => {
         ))}
       </div>
 
-      {/* Search & Actions */}
+      {/* Actions */}
       <div className="flex items-center gap-4 shrink-0">
-        <form onSubmit={handleSearchSubmit} className="relative hidden lg:block w-64">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-          <input
-            type="text"
-            aria-label={location.pathname.includes('/monitoring') ? 'Search operations' : 'Search organizations'}
-            placeholder={location.pathname.includes('/monitoring') ? 'Search operations…' : 'Search organizations…'}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-1.5 bg-surface border border-line-strong rounded-lg text-xs text-ink placeholder-muted focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-all"
-          />
-        </form>
-
         {/* Notifications */}
         <button
           disabled={!hasPermission('platform.notifications.read')}

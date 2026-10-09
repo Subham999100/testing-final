@@ -48,7 +48,10 @@ export class PlatformOrganisationController {
   ) {}
 
   @Get()
-  @RequirePermissions(PlatformPermissions.ORGANISATIONS_READ)
+  @RequirePermissions(
+    PlatformPermissions.ORGANISATIONS_READ,
+    PlatformPermissions.USERS_READ,
+  )
   async findAll(@Query() query: QueryOrganisationDto) {
     return this.organisationService.findAll(query);
   }
@@ -126,7 +129,10 @@ export class PlatformOrganisationController {
   }
 
   @Post(':id/super-admin/transfer')
-  @RequirePermissions(PlatformPermissions.ORGANISATIONS_UPDATE)
+  @RequirePermissions(
+    PlatformPermissions.ORGANISATIONS_UPDATE,
+    PlatformPermissions.USERS_READ,
+  )
   @HttpCode(HttpStatus.OK)
   async transferSuperAdmin(
     @Param('id') id: string,

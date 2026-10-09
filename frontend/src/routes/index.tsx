@@ -108,14 +108,6 @@ export const AppRoutes: React.FC = () => (
         }
       />
       <Route
-        path="moderation/jobs"
-        element={
-          <PermissionRoute permission="platform.moderation.read">
-            <Moderation />
-          </PermissionRoute>
-        }
-      />
-      <Route
         path="reports"
         element={
           <PermissionRoute permission="platform.reports.generate">

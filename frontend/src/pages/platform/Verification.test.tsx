@@ -170,27 +170,106 @@ describe('Platform Verification Page', () => {
     });
   });
 
-  it('opens detail modal when Review button is clicked', async () => {
+  it('opens detail modal when Review button is clicked on backend items using applicationId property', async () => {
+    // Backend returns applicationId instead of id
+    const backendItems = [
+      {
+        applicationId: 'app_uuid_999',
+        applicationNumber: 505,
+        name: 'Cyberdyne Systems',
+        slug: 'cyberdyne-systems',
+        domain: 'cyberdyne.com',
+        contactEmail: 'info@cyberdyne.com',
+        ownerName: 'Miles Dyson',
+        ownerEmail: 'miles@cyberdyne.com',
+        ownerPhone: '+1-555-0999',
+        selectedPlan: {
+          id: 'plan_pro',
+          name: 'Pro Tier',
+          code: 'PRO',
+          tokenAmount: 10000,
+          priceCents: 49900,
+          currency: 'USD',
+        },
+        paymentMethod: 'CREDIT_CARD',
+        paymentReference: 'CC-776655',
+        paymentStatus: 'VERIFIED' as const,
+        status: 'PENDING_REVIEW' as const,
+        documentsCount: 1,
+        createdAt: '2026-10-08T12:00:00.000Z',
+      },
+    ];
+
+    (OrganisationApplicationService.getApplications as any).mockResolvedValueOnce({
+      data: backendItems,
+      meta: { total: 1, page: 1, limit: 15, totalPages: 1 },
+    });
+
+    (OrganisationApplicationService.getApplicationById as any).mockResolvedValueOnce({
+      id: 'app_uuid_999',
+      applicationNumber: 505,
+      name: 'Cyberdyne Systems',
+      slug: 'cyberdyne-systems',
+      domain: 'cyberdyne.com',
+      contactEmail: 'info@cyberdyne.com',
+      contactPhone: '+1-555-0999',
+      industry: 'Robotics & AI',
+      companySize: '500-1000',
+      website: 'https://cyberdyne.com',
+      address: 'Sunnyvale, CA',
+      ownerFirstName: 'Miles',
+      ownerLastName: 'Dyson',
+      ownerName: 'Miles Dyson',
+      ownerEmail: 'miles@cyberdyne.com',
+      ownerPhone: '+1-555-0999',
+      ownerDesignation: 'Director of Special Projects',
+      selectedPlan: {
+        id: 'plan_pro',
+        name: 'Pro Tier',
+        code: 'PRO',
+        tokenAmount: 10000,
+        priceCents: 49900,
+        currency: 'USD',
+      },
+      paymentMethod: 'CREDIT_CARD',
+      paymentReference: 'CC-776655',
+      paymentStatus: 'VERIFIED' as const,
+      status: 'PENDING_REVIEW' as const,
+      rejectionReason: null,
+      requestedInfoNotes: null,
+      applicantResponseNotes: null,
+      submittedAt: '2026-10-08T12:00:00.000Z',
+      reviewedAt: null,
+      createdOrganisationId: null,
+      documents: [],
+      reviewHistory: [],
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByText('Cyberdyne Systems')).toBeTruthy();
+    });
+
+    const reviewButton = screen.getByRole('button', { name: 'Review' });
+    fireEvent.click(reviewButton);
+
+    await waitFor(() => {
+      expect(OrganisationApplicationService.getApplicationById).toHaveBeenCalledWith('app_uuid_999');
+      expect(screen.getByText('Robotics & AI')).toBeTruthy();
+      expect(screen.getByText('Director of Special Projects')).toBeTruthy();
+    });
+  });
+
+  it('displays API error state when detail modal fails to load application data', async () => {
     (OrganisationApplicationService.getApplications as any).mockResolvedValueOnce({
       data: [mockApplications[0]],
       meta: { total: 1, page: 1, limit: 15, totalPages: 1 },
     });
 
-    (OrganisationApplicationService.getApplicationById as any).mockResolvedValueOnce({
-      ...mockApplications[0],
-      contactPhone: '+1-555-0101',
-      industry: 'Defense & Technology',
-      companySize: '1000-5000',
-      website: 'https://stark.com',
-      address: '10880 Wilshire Blvd, Los Angeles, CA',
-      ownerFirstName: 'Tony',
-      ownerLastName: 'Stark',
-      ownerDesignation: 'Chief Technology Officer',
-      rejectionReason: null,
-      requestedInfoNotes: null,
-      applicantResponseNotes: null,
-      documents: [],
-      reviewHistory: [],
+    (OrganisationApplicationService.getApplicationById as any).mockRejectedValueOnce({
+      message: 'Failed to retrieve application detail from server',
+      status: 500,
     });
 
     renderComponent();
@@ -202,11 +281,8 @@ describe('Platform Verification Page', () => {
     const reviewButton = screen.getByRole('button', { name: 'Review' });
     fireEvent.click(reviewButton);
 
-    // Modal should load and display company details
     await waitFor(() => {
-      expect(screen.getByText('Defense & Technology')).toBeTruthy();
-      expect(screen.getByText('Chief Technology Officer')).toBeTruthy();
-      expect(screen.getByRole('button', { name: /Approve & Provision/i })).toBeTruthy();
+      expect(screen.getByText('Failed to retrieve application detail from server')).toBeTruthy();
     });
   });
 });

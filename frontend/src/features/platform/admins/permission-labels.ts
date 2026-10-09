@@ -49,15 +49,15 @@ export const AVAILABLE_PERMISSIONS = platformPermissions
   .filter(
     (key) =>
       !key.startsWith("platform.admins.") &&
-      !key.startsWith("platform.settings."),
+      !key.startsWith("platform.settings.") &&
+      !key.startsWith("platform.jobs.") &&
+      !key.startsWith("platform.moderation."),
   )
   .map((key) => ({ key, label: permissionLabel(key) }));
 export const permissionGroups: Record<string, string> = {
   organisations: "Organizations",
   users: "User accounts",
   tokens: "Tokens & billing",
-  jobs: "Jobs",
-  moderation: "Moderation",
   support: "Support",
   notifications: "Notifications",
   reports: "Reports & exports",

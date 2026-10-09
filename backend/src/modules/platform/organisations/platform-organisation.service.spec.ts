@@ -6,6 +6,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PlatformOrganisationService } from './platform-organisation.service';
 import { PrismaService } from '../../../database/prisma.service';
+import { ConfigService } from '@nestjs/config';
+import { EmailService } from '../../../integrations/email/email.service';
 import { AuditService } from '../../audit/audit.service';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { OrganisationStatus, UserRole } from '@prisma/client';
@@ -63,6 +65,8 @@ describe('PlatformOrganisationService', () => {
         PlatformOrganisationService,
         { provide: PrismaService, useValue: prisma },
         { provide: AuditService, useValue: auditService },
+        { provide: EmailService, useValue: { sendMail: jest.fn().mockResolvedValue(true) } },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(undefined) } },
       ],
     }).compile();
 

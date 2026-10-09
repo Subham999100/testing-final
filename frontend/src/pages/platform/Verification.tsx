@@ -118,16 +118,18 @@ export function Verification() {
     }
   };
 
-  const formatDate = (dateStr: string) => {
+  const formatDate = (dateStr?: string | null) => {
+    if (!dateStr) return '—';
     try {
       const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '—';
       return d.toLocaleDateString('en-GB', {
         day: '2-digit',
         month: 'short',
         year: 'numeric',
       });
     } catch {
-      return dateStr;
+      return '—';
     }
   };
 
@@ -245,83 +247,86 @@ export function Verification() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {applications.map((app) => (
-                    <tr
-                      key={app.id}
-                      className="hover:bg-surface-soft/40 transition-colors group cursor-pointer"
-                      onClick={() => setSelectedApplicationId(app.id)}
-                    >
-                      {/* Application # */}
-                      <td className="py-3 px-4 font-mono font-medium text-ink">
-                        {app.applicationNumber}
-                      </td>
+                  {applications.map((app) => {
+                    const targetId = app.id || (app as any).applicationId;
+                    return (
+                      <tr
+                        key={targetId || app.applicationNumber}
+                        className="hover:bg-surface-soft/40 transition-colors group cursor-pointer"
+                        onClick={() => targetId && setSelectedApplicationId(targetId)}
+                      >
+                        {/* Application # */}
+                        <td className="py-3 px-4 font-mono font-medium text-ink">
+                          {app.applicationNumber}
+                        </td>
 
-                      {/* Organisation */}
-                      <td className="py-3 px-4">
-                        <div className="font-medium text-ink">{app.name}</div>
-                        <div className="text-[11px] text-muted flex items-center gap-2">
-                          <span>{app.slug}</span>
-                          {app.domain && <span>• {app.domain}</span>}
-                        </div>
-                      </td>
-
-                      {/* Representative */}
-                      <td className="py-3 px-4">
-                        <div className="text-ink font-medium">{app.ownerName}</div>
-                        <div className="text-[11px] text-muted">{app.ownerEmail || app.contactEmail}</div>
-                      </td>
-
-                      {/* Plan & Tokens */}
-                      <td className="py-3 px-4">
-                        <div className="text-ink font-medium">
-                          {app.selectedPlan?.name || 'Standard'}
-                        </div>
-                        <div className="text-[11px] text-muted font-mono">
-                          {app.selectedPlan?.tokenAmount
-                            ? Number(app.selectedPlan.tokenAmount).toLocaleString()
-                            : '0'}{' '}
-                          tokens
-                        </div>
-                      </td>
-
-                      {/* Payment */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] font-mono text-ink">
-                            {app.paymentMethod ? app.paymentMethod.replace(/_/g, ' ') : '—'}
-                          </span>
-                          {getPaymentBadge(app.paymentStatus)}
-                        </div>
-                        {app.paymentReference && (
-                          <div className="text-[10px] text-muted font-mono truncate max-w-[120px]">
-                            {app.paymentReference}
+                        {/* Organisation */}
+                        <td className="py-3 px-4">
+                          <div className="font-medium text-ink">{app.name}</div>
+                          <div className="text-[11px] text-muted flex items-center gap-2">
+                            <span>{app.slug}</span>
+                            {app.domain && <span>• {app.domain}</span>}
                           </div>
-                        )}
-                      </td>
+                        </td>
 
-                      {/* Status */}
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        {getStatusBadge(app.status)}
-                      </td>
+                        {/* Representative */}
+                        <td className="py-3 px-4">
+                          <div className="text-ink font-medium">{app.ownerName}</div>
+                          <div className="text-[11px] text-muted">{app.ownerEmail || app.contactEmail}</div>
+                        </td>
 
-                      {/* Submitted */}
-                      <td className="py-3 px-4 text-muted whitespace-nowrap">
-                        {formatDate(app.submittedAt)}
-                      </td>
+                        {/* Plan & Tokens */}
+                        <td className="py-3 px-4">
+                          <div className="text-ink font-medium">
+                            {app.selectedPlan?.name || 'Standard'}
+                          </div>
+                          <div className="text-[11px] text-muted font-mono">
+                            {app.selectedPlan?.tokenAmount
+                              ? Number(app.selectedPlan.tokenAmount).toLocaleString()
+                              : '0'}{' '}
+                            tokens
+                          </div>
+                        </td>
 
-                      {/* Actions */}
-                      <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedApplicationId(app.id)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-border bg-surface hover:bg-surface-soft text-ink transition-colors shadow-xs"
-                        >
-                          <Eye className="w-3.5 h-3.5 text-muted" />
-                          Review
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                        {/* Payment */}
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-mono text-ink">
+                              {app.paymentMethod ? app.paymentMethod.replace(/_/g, ' ') : '—'}
+                            </span>
+                            {getPaymentBadge(app.paymentStatus)}
+                          </div>
+                          {app.paymentReference && (
+                            <div className="text-[10px] text-muted font-mono truncate max-w-[120px]">
+                              {app.paymentReference}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          {getStatusBadge(app.status)}
+                        </td>
+
+                        {/* Submitted */}
+                        <td className="py-3 px-4 text-muted whitespace-nowrap">
+                          {formatDate(app.submittedAt || (app as any).createdAt)}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => targetId && setSelectedApplicationId(targetId)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-border bg-surface hover:bg-surface-soft text-ink transition-colors shadow-xs"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-muted" />
+                            Review
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

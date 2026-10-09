@@ -81,10 +81,14 @@ export interface PlatformApplicationItem {
     id: string;
     name: string;
     code: string;
+    description?: string | null;
     tokenAmount: number;
     priceCents: number;
     currency: string;
+    billingCycle?: string;
+    features?: string[];
   } | null;
+
   paymentMethod: string | null;
   paymentReference: string | null;
   paymentStatus: 'PENDING' | 'VERIFIED' | 'FAILED';
@@ -118,7 +122,12 @@ export interface PlatformApplicationDetail extends PlatformApplicationItem {
   applicantResponseNotes: string | null;
   documents: ApplicationDocumentMetadata[];
   reviewHistory: ApplicationReviewHistoryItem[];
+  organisation?: any;
+  owner?: any;
+  payment?: any;
+  application?: any;
 }
+
 
 export const OrganisationApplicationService = {
   // ── Public APIs ─────────────────────────────────────────────
@@ -148,6 +157,7 @@ export const OrganisationApplicationService = {
       {
         headers: {
           'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${continuationToken}`,
           'x-continuation-token': continuationToken,
         },
       },
@@ -180,16 +190,78 @@ export const OrganisationApplicationService = {
     sortOrder?: 'asc' | 'desc';
   }): Promise<{ data: PlatformApplicationItem[]; meta: { total: number; page: number; limit: number; totalPages: number } }> {
     const res: any = await apiClient.get('/platform/organisation-applications', { params });
-    if (res.meta) return res;
-    return {
-      data: Array.isArray(res) ? res : (res.data || []),
-      meta: res.meta || { total: res.length || 0, page: 1, limit: 20, totalPages: 1 },
-    };
+    const rawData = Array.isArray(res) ? res : (res.data || []);
+    const mappedData = rawData.map((item: any) => ({
+      ...item,
+      id: item.id || item.applicationId,
+      submittedAt: item.submittedAt || item.createdAt || '',
+    }));
+    const meta = res.meta || { total: mappedData.length, page: 1, limit: 20, totalPages: 1 };
+    return { data: mappedData, meta };
   },
 
   async getApplicationById(id: string): Promise<PlatformApplicationDetail> {
     const res: any = await apiClient.get(`/platform/organisation-applications/${id}`);
-    return res.data || res;
+    const data = res.data || res;
+
+    const org = data.organisation || {};
+    const owner = data.owner || {};
+    const payment = data.payment || {};
+    const appInfo = data.application || {};
+    const plan = data.plan || data.selectedPlan || null;
+
+    const ownerFirstName = owner.firstName || data.ownerFirstName || '';
+    const ownerLastName = owner.lastName || data.ownerLastName || '';
+
+    return {
+      id: data.id,
+      applicationNumber: data.applicationNumber,
+      name: org.name || data.name || '',
+      slug: org.slug || data.slug || '',
+      domain: org.domain ?? data.domain ?? null,
+      contactEmail: org.contactEmail || data.contactEmail || '',
+      contactPhone: org.contactPhone ?? data.contactPhone ?? null,
+      industry: org.industry ?? data.industry ?? null,
+      companySize: org.companySize ?? data.companySize ?? null,
+      website: org.website ?? data.website ?? null,
+      address: org.address ?? data.address ?? null,
+      ownerFirstName,
+      ownerLastName,
+      ownerName: (ownerFirstName || ownerLastName)
+        ? `${ownerFirstName} ${ownerLastName}`.trim()
+        : data.ownerName || '',
+      ownerEmail: owner.email || data.ownerEmail || '',
+      ownerPhone: owner.phone ?? data.ownerPhone ?? null,
+      ownerDesignation: owner.designation ?? data.ownerDesignation ?? null,
+      selectedPlan: plan ? {
+        id: plan.id,
+        name: plan.name,
+        code: plan.code,
+        description: plan.description || null,
+        tokenAmount: plan.tokenAmount ?? 0,
+        priceCents: plan.priceCents ?? 0,
+        currency: plan.currency || 'USD',
+        billingCycle: plan.billingCycle || 'MONTHLY',
+        features: plan.features || [],
+      } : null,
+      paymentMethod: payment.method ?? data.paymentMethod ?? null,
+      paymentReference: payment.reference ?? data.paymentReference ?? null,
+      paymentStatus: payment.status || data.paymentStatus || 'PENDING',
+      status: appInfo.status || data.status || 'PENDING_REVIEW',
+      rejectionReason: appInfo.rejectionReason ?? data.rejectionReason ?? null,
+      requestedInfoNotes: appInfo.requestedInfoNotes ?? data.requestedInfoNotes ?? null,
+      applicantResponseNotes: appInfo.applicantResponseNotes ?? data.applicantResponseNotes ?? null,
+      documentsCount: (data.documents || []).length,
+      submittedAt: appInfo.createdAt || data.submittedAt || data.createdAt,
+      reviewedAt: appInfo.reviewedAt ?? data.reviewedAt ?? null,
+      createdOrganisationId: appInfo.createdOrganisationId ?? data.createdOrganisationId ?? null,
+      documents: data.documents || [],
+      reviewHistory: data.reviewHistory || [],
+      organisation: data.organisation,
+      owner: data.owner,
+      payment: data.payment,
+      application: data.application,
+    };
   },
 
   async fetchDocumentBlob(
@@ -223,8 +295,18 @@ export const OrganisationApplicationService = {
     return res.data || res;
   },
 
-  async approveApplication(id: string): Promise<any> {
-    const res: any = await apiClient.post(`/platform/organisation-applications/${id}/approve`);
+  async approveApplication(
+    id: string,
+    payload?: {
+      name?: string;
+      slug?: string;
+      ownerEmail?: string;
+      recruiterLimit?: number;
+      initialTokens?: number;
+    },
+  ): Promise<any> {
+    const res: any = await apiClient.post(`/platform/organisation-applications/${id}/approve`, payload || {});
     return res.data || res;
   },
 };
+
