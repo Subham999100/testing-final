@@ -41,8 +41,8 @@ export const api = {
     const res = (await apiClient.get(url, { params: clean(params) })) as unknown as Envelope<T[]>;
     return { data: res.data ?? [], meta: res.meta ?? { page: 1, limit: 20, total: res.data?.length ?? 0, totalPages: 1 } };
   },
-  async post<T>(url: string, body?: unknown): Promise<T> {
-    return ((await apiClient.post(url, body ?? {})) as unknown as Envelope<T>).data;
+  async post<T>(url: string, body?: unknown, options?: { timeout?: number }): Promise<T> {
+    return ((await apiClient.post(url, body ?? {}, options)) as unknown as Envelope<T>).data;
   },
   async patch<T>(url: string, body?: unknown): Promise<T> {
     return ((await apiClient.patch(url, body ?? {})) as unknown as Envelope<T>).data;

@@ -523,6 +523,10 @@ model Candidate {
   createdById     String
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
+  professional    RecruiterProfile?
+  recruiterVisits RecruiterVisit[]
+  recruiterDownloads RecruiterDownload[]
+  folderEntries   RecruiterFolderCandidate[]
   applications    Application[]
   notes           CandidateNote[]
   saved           SavedCandidate[]
@@ -1063,6 +1067,112 @@ model ApplicationReviewHistory {
   @@index([actorId])
   @@index([action])
   @@map("application_review_history")
+}
+
+
+
+
+// Additive recruiter workspace. Candidates remain organisation-owned until candidate portal integration.
+model RecruiterProfile {
+  searchDetails Json @default("{}")
+  candidateId String @id
+  summary String @default("")
+  designation String @default("")
+  industry String @default("")
+  experienceMonths Int @default(0)
+  currentSalary Int?
+  expectedSalary Int?
+  noticePeriodDays Int?
+  preferredLocations String[] @default([])
+  employmentPreference String @default("")
+  workPreference String @default("")
+  employment Json @default("[]")
+  education Json @default("[]")
+  certifications Json @default("[]")
+  itSkills Json @default("[]")
+  lastActiveAt DateTime?
+  updatedAt DateTime @updatedAt
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  @@map("recruiter_profiles")
+}
+model RecruiterVisit {
+  id String @id @default(uuid())
+  organisationId String
+  userId String
+  candidateId String
+  lastViewedAt DateTime @default(now())
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  @@unique([userId, candidateId])
+  @@index([organisationId, candidateId, lastViewedAt])
+  @@map("recruiter_visits")
+}
+model RecruiterDownload {
+  id String @id @default(uuid())
+  organisationId String
+  userId String
+  candidateId String
+  downloadedAt DateTime @default(now())
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  @@unique([userId, candidateId])
+  @@index([organisationId, candidateId, downloadedAt])
+  @@map("recruiter_downloads")
+}
+model RecruiterFolder {
+  id String @id @default(uuid())
+  organisationId String
+  userId String
+  name String
+  createdAt DateTime @default(now())
+  candidates RecruiterFolderCandidate[]
+  @@index([organisationId, userId])
+  @@map("recruiter_folders")
+}
+model RecruiterFolderCandidate {
+  id String @id @default(uuid())
+  folderId String
+  candidateId String
+  createdAt DateTime @default(now())
+  folder RecruiterFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  @@unique([folderId, candidateId])
+  @@map("recruiter_folder_candidates")
+}
+model RecruiterSavedSearch {
+  id String @id @default(uuid())
+  organisationId String
+  userId String
+  name String
+  shared Boolean @default(false)
+  filters Json
+  createdAt DateTime @default(now())
+  @@index([organisationId, userId])
+  @@map("recruiter_saved_searches")
+}
+
+// Immutable recipient snapshots; SMTP-uncertain recipients are never automatically retried.
+model RecruiterEmailBatch {
+  id String @id @default(uuid())
+  organisationId String
+  userId String
+  requestId String @unique
+  subject String
+  body String
+  createdAt DateTime @default(now())
+  recipients RecruiterEmailRecipient[]
+  @@index([organisationId, userId, createdAt])
+  @@map("recruiter_email_batches")
+}
+model RecruiterEmailRecipient {
+  id String @id @default(uuid())
+  batchId String
+  candidateId String
+  status String @default("PENDING")
+  detail String?
+  updatedAt DateTime @updatedAt
+  batch RecruiterEmailBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  @@unique([batchId, candidateId])
+  @@index([batchId, status])
+  @@map("recruiter_email_recipients")
 }
 
 
