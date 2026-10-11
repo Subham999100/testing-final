@@ -11,6 +11,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
 import { PlatformModule } from './modules/platform/platform.module';
 import { OrgModule } from './modules/org/org.module';
 import { PublicModule } from './modules/public/public.module';
+import { CandidateModule } from './modules/candidate/candidate.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { PublicModule } from './modules/public/public.module';
     PlatformModule,
     OrgModule,
     PublicModule,
+    CandidateModule,
   ],
 })
 export class AppModule {}

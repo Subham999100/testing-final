@@ -30,3 +30,6 @@ yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
+
+storage_vault/
+backend/storage_vault/
