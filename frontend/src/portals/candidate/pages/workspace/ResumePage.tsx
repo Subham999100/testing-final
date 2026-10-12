@@ -11,7 +11,7 @@ import { candidateQueryKeys } from '../../lib/queryKeys';
 import { CandidateResumeMetadata } from '../../lib/types';
 import { useCandidateAuth } from '../../lib/session';
 import { formatDate, formatBytes } from '../../lib/format';
-import { Button, PageSkeleton } from '@/portals/org/ui/ui';
+import { Button, PageSkeleton, ConfirmDialog } from '@/portals/org/ui/ui';
 import { toast } from '@/portals/org/ui/toast';
 import { Download, FileText, Trash2, UploadCloud, ArrowRight, CheckCircle2 } from 'lucide-react';
 
@@ -20,6 +20,8 @@ export const ResumePage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -69,15 +71,18 @@ export const ResumePage: React.FC = () => {
     }
   };
 
-  const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete your stored resume?')) return;
+  const handleConfirmDelete = async () => {
+    setDeleting(true);
     try {
       await candidateApi.delete('/candidate/profile/resume');
-      toast.success('Resume removed from vault');
+      toast.success('Resume deleted successfully');
+      setDeleteConfirmOpen(false);
       await refetch();
       await refetchMe();
     } catch (err: any) {
       toast.error(err?.message || 'Failed to delete resume');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -161,14 +166,15 @@ export const ResumePage: React.FC = () => {
                 <Download className="w-3.5 h-3.5" />
                 Download
               </Button>
-              <Button
-                variant="danger"
-                onClick={handleDelete}
-                className="flex items-center gap-1.5 text-xs text-red-600 hover:bg-red-50"
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmOpen(true)}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#DC2626] hover:bg-red-700 active:bg-red-800 text-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 transition-colors cursor-pointer"
+                aria-label="Delete resume"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                Remove
-              </Button>
+                <Trash2 className="w-3.5 h-3.5 text-white" />
+                Delete
+              </button>
             </div>
           </div>
 
@@ -208,6 +214,21 @@ export const ResumePage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onClose={() => !deleting && setDeleteConfirmOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Resume"
+        confirmLabel={deleting ? 'Deleting...' : 'Delete'}
+        tone="danger"
+        loading={deleting}
+      >
+        <p className="text-sm text-slate-600 leading-relaxed">
+          Are you sure you want to delete <span className="font-semibold text-slate-900">{resume?.fileName}</span>? You will need to upload a new resume when applying for jobs.
+        </p>
+      </ConfirmDialog>
 
       {/* Hidden file input */}
       <input
