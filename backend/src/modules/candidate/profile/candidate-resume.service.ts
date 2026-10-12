@@ -212,8 +212,20 @@ export class CandidateResumeService {
 
     const newStorageKey = uploadResult.key;
 
-    // 2. Update database record
+    // 2. Update database record with extracted resumeText and updated searchableText
     try {
+      const effSkills = profile.skills || [];
+      const searchableText = [
+        user.firstName,
+        user.lastName,
+        profile.headline,
+        profile.location,
+        profile.currentCompany,
+        ...effSkills,
+        profile.bio,
+        resumeText,
+      ].filter(Boolean).join(' ').trim();
+
       const updatedProfile = await this.prisma.candidateProfile.update({
         where: { id: profile.id },
         data: {
@@ -223,6 +235,7 @@ export class CandidateResumeService {
           resumeFileSize: file.buffer.length,
           resumeUploadedAt: new Date(),
           resumeText,
+          searchableText,
         },
       });
 
@@ -362,7 +375,21 @@ export class CandidateResumeService {
       this.logger.warn(`Storage delete warning for key ${storageKey}: ${err.message}`);
     });
 
-    // Clear database fields
+    // Clear database fields and recompute searchableText
+    const user = await this.prisma.user.findUnique({
+      where: { id: actor.userId },
+    });
+    const effSkills = profile.skills || [];
+    const searchableText = [
+      user?.firstName,
+      user?.lastName,
+      profile.headline,
+      profile.location,
+      profile.currentCompany,
+      ...effSkills,
+      profile.bio,
+    ].filter(Boolean).join(' ').trim();
+
     await this.prisma.candidateProfile.update({
       where: { id: profile.id },
       data: {
@@ -372,6 +399,7 @@ export class CandidateResumeService {
         resumeFileSize: null,
         resumeUploadedAt: null,
         resumeText: null,
+        searchableText,
       },
     });
 

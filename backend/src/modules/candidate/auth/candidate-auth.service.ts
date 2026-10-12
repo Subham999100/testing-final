@@ -77,6 +77,8 @@ export interface CandidateMeResult {
     experience: any;
     resumeFileName: string | null;
     resumeUploadedAt: Date | null;
+    visibleToRecruiters: boolean;
+    blockedOrganisations: string[];
   } | null;
 }
 
@@ -134,6 +136,8 @@ export class CandidateAuthService {
         data: {
           userId: createdUser.id,
           phone: dto.phone?.trim() || null,
+          visibleToRecruiters: dto.visibleToRecruiters === true,
+          searchableText: `${createdUser.firstName} ${createdUser.lastName}`,
         },
       });
 
@@ -348,6 +352,8 @@ export class CandidateAuthService {
             experience: user.candidateProfile.experience,
             resumeFileName: user.candidateProfile.resumeFileName,
             resumeUploadedAt: user.candidateProfile.resumeUploadedAt,
+            visibleToRecruiters: user.candidateProfile.visibleToRecruiters,
+            blockedOrganisations: user.candidateProfile.blockedOrganisations,
           }
         : null,
     };

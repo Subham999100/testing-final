@@ -54,6 +54,8 @@ export interface CandidateProfile {
   experience?: CandidateExperienceItem[] | null;
   resumeFileName?: string | null;
   resumeUploadedAt?: string | null;
+  visibleToRecruiters?: boolean;
+  blockedOrganisations?: string[];
 }
 
 export interface CandidateFullProfile {
@@ -75,6 +77,8 @@ export interface CandidateFullProfile {
   education: CandidateEducationItem[];
   experience: CandidateExperienceItem[];
   resume: CandidateResumeMetadata;
+  visibleToRecruiters?: boolean;
+  blockedOrganisations?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -194,6 +198,7 @@ export interface CandidateRegisterRequest {
   firstName: string;
   lastName: string;
   phone?: string;
+  visibleToRecruiters?: boolean;
 }
 
 export interface UpdateCandidateProfileRequest {
@@ -209,6 +214,8 @@ export interface UpdateCandidateProfileRequest {
   bio?: string;
   education?: CandidateEducationItem[];
   experience?: CandidateExperienceItem[];
+  visibleToRecruiters?: boolean;
+  blockedOrganisations?: string[];
 }
 
 export interface CreateCandidateApplicationRequest {

@@ -38,6 +38,9 @@ import {
   SmsDispatchDto,
 } from "./dto";
 import { RecruiterService } from "./recruiter.service";
+import { GlobalTalentSearchService } from "./global-talent-search.service";
+import { GlobalSearchDto } from "./global-talent-search.dto";
+
 class SimilarQueryDto {
   @IsOptional() @IsUUID() jobId?: string;
   @IsOptional() @IsIn(["skills", "viewed"]) mode?: string;
@@ -51,7 +54,20 @@ export class RecruiterController {
     private readonly service: RecruiterService,
     private readonly reports: RecruiterReportsService,
     private readonly outreach: RecruiterOutreachService,
+    private readonly globalSearchService: GlobalTalentSearchService,
   ) {}
+
+  @Post("global-search")
+  @OrgPerms("candidates.search")
+  globalSearch(@Org() ctx: OrgContext, @Body() dto: GlobalSearchDto) {
+    return this.globalSearchService.search(ctx, dto);
+  }
+
+  @Post("global-candidates/:userId/unlock")
+  @OrgPerms("candidates.search")
+  globalUnlock(@Org() ctx: OrgContext, @Param("userId") userId: string) {
+    return this.globalSearchService.unlock(ctx, userId);
+  }
   @Get("recent-searches")
   @OrgPerms("candidates.search")
   recent(@Org() ctx: OrgContext) {

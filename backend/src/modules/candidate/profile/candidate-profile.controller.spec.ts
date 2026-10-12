@@ -53,6 +53,8 @@ describe('CandidateProfileController', () => {
       mimeType: 'application/pdf',
       uploadedAt: new Date(),
     },
+    visibleToRecruiters: false,
+    blockedOrganisations: [],
     createdAt: new Date(),
     updatedAt: new Date(),
   };

@@ -23,6 +23,7 @@ export const RegisterPage: React.FC = () => {
     phone: '',
   });
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [visibleToRecruiters, setVisibleToRecruiters] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -57,6 +58,7 @@ export const RegisterPage: React.FC = () => {
         email: form.email.trim(),
         password: form.password,
         phone: form.phone.trim() || undefined,
+        visibleToRecruiters,
       });
       // Route new candidate directly to resume upload onboarding
       navigate(`/candidate/resume?next=${encodeURIComponent(nextUrl)}&onboarding=true`, { replace: true });
@@ -191,6 +193,36 @@ export const RegisterPage: React.FC = () => {
           {confirmPassword.length > 0 && !passwordsMatch && (
             <p className="text-xs text-red-600 -mt-2">Passwords do not match</p>
           )}
+
+          {/* Global Talent Discovery Opt-in */}
+          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
+            <p className="font-semibold text-slate-800">Let recruiters find you?</p>
+            <p className="text-slate-500 leading-relaxed">
+              Allow verified hiring teams to discover your profile in the global talent pool. Your email, phone, and resume remain private until unlocked.
+            </p>
+            <div className="flex gap-4 pt-1">
+              <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
+                <input
+                  type="radio"
+                  name="visibleToRecruiters"
+                  checked={visibleToRecruiters === true}
+                  onChange={() => setVisibleToRecruiters(true)}
+                  className="text-orange-600 focus:ring-orange-500"
+                />
+                Yes
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
+                <input
+                  type="radio"
+                  name="visibleToRecruiters"
+                  checked={visibleToRecruiters === false}
+                  onChange={() => setVisibleToRecruiters(false)}
+                  className="text-orange-600 focus:ring-orange-500"
+                />
+                No (Default)
+              </label>
+            </div>
+          </div>
 
           <div className="pt-2">
             <Button

@@ -132,3 +132,9 @@ The frontend will run on `http://localhost:5173/` and proxies/calls API requests
    Saved jobs bookmarks, candidate profile photos, real-time chat, interview scheduling self-service, and in-app notifications are intentionally omitted from Candidate Portal MVP.
 7. **Resume Text Extraction & Legacy .doc Files:**
    Resume text is extracted automatically from uploaded PDF and DOCX files (capped at 200,000 characters with a 10s timeout, non-blocking upload failure safety). Legacy binary `.doc` files yield `null` extracted text. Text extraction never logs resume text to system logs.
+
+---
+
+## 6. Known Risks
+
+* **Global Talent Pool Scraping Risk:** With no daily limits, a recruiter could scrape the opted-in candidate pool. Enable the limit config and review the search audit log before production.

@@ -30,6 +30,10 @@ export default () => {
     redis: {
       url: process.env.REDIS_URL,
     },
+    globalSearch: {
+      dailyLimit: parseInt(process.env.GLOBAL_SEARCH_DAILY_LIMIT || '0', 10),
+      unlockDailyLimit: parseInt(process.env.GLOBAL_UNLOCK_DAILY_LIMIT || '0', 10),
+    },
   };
 };
 

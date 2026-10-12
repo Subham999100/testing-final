@@ -100,5 +100,34 @@ export interface SavedSearch {
   owned: boolean;
   filters: Record<string, string | number | boolean>;
 }
+export interface MaskedGlobalCandidate {
+  userId: string;
+  candidateId: string | null;
+  isInPool: boolean;
+  isUnlocked: boolean;
+  firstName: string;
+  lastName: string;
+  headline: string | null;
+  location: string | null;
+  experienceYears: number | null;
+  currentCompany: string | null;
+  skills: string[];
+  bio: string | null;
+  education?: any;
+  experience?: any;
+  email?: string;
+  phone?: string | null;
+  resumeUrl?: string | null;
+  resumeText?: string | null;
+}
+
+export interface GlobalSearchResponse {
+  items: MaskedGlobalCandidate[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export const root = "/org/recruiter";
 export const talentKeys = ["org", "recruiter"] as const;

@@ -197,4 +197,13 @@ export class UpdateCandidateProfileDto {
   @Type(() => CandidateExperienceItemDto)
   @IsOptional()
   experience?: CandidateExperienceItemDto[];
+
+  @IsBoolean({ message: 'visibleToRecruiters must be a boolean' })
+  @IsOptional()
+  visibleToRecruiters?: boolean;
+
+  @IsArray({ message: 'blockedOrganisations must be an array of strings' })
+  @IsString({ each: true, message: 'Each blocked organisation must be a string' })
+  @IsOptional()
+  blockedOrganisations?: string[];
 }

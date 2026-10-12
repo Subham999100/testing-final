@@ -66,6 +66,8 @@ describe('CandidateAuthController', () => {
       experience: [],
       resumeFileName: 'resume.pdf',
       resumeUploadedAt: new Date(),
+      visibleToRecruiters: false,
+      blockedOrganisations: [],
     },
   };
 

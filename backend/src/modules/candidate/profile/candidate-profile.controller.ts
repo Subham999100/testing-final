@@ -50,4 +50,10 @@ export class CandidateProfileController {
   ): Promise<CandidateProfileResponse> {
     return this.profileService.updateProfile(actor, dto);
   }
+
+  @Get('organisations')
+  @HttpCode(HttpStatus.OK)
+  async getOrganisations(): Promise<{ id: string; name: string }[]> {
+    return this.profileService.getActiveOrganisations();
+  }
 }

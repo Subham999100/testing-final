@@ -40,6 +40,8 @@ export interface CandidateProfileResponse {
     mimeType: string | null;
     uploadedAt: Date | null;
   };
+  visibleToRecruiters: boolean;
+  blockedOrganisations: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -125,6 +127,14 @@ export class CandidateProfileService {
     if (dto.bio !== undefined) updateData.bio = dto.bio;
     if (dto.education !== undefined) updateData.education = dto.education;
     if (dto.experience !== undefined) updateData.experience = dto.experience;
+    if (dto.visibleToRecruiters !== undefined) {
+      updateData.visibleToRecruiters = Boolean(dto.visibleToRecruiters);
+    }
+    if (dto.blockedOrganisations !== undefined) {
+      updateData.blockedOrganisations = Array.isArray(dto.blockedOrganisations)
+        ? [...new Set(dto.blockedOrganisations.map((o) => o.trim()).filter(Boolean))]
+        : [];
+    }
 
     let updatedUser = user;
     let newFirstName = dto.firstName;
@@ -145,6 +155,27 @@ export class CandidateProfileService {
         include: { candidateProfile: true },
       });
     }
+
+    // Keep searchableText synchronized
+    const effFirstName = newFirstName !== undefined ? newFirstName.trim() : user.firstName;
+    const effLastName = newLastName !== undefined ? newLastName.trim() : user.lastName;
+    const effHeadline = dto.headline !== undefined ? dto.headline : profile.headline;
+    const effLocation = dto.location !== undefined ? dto.location : profile.location;
+    const effCompany = dto.currentCompany !== undefined ? dto.currentCompany : profile.currentCompany;
+    const effSkills = dto.skills !== undefined ? updateData.skills : (profile.skills || []);
+    const effBio = dto.bio !== undefined ? dto.bio : profile.bio;
+    const effResumeText = profile.resumeText;
+
+    updateData.searchableText = [
+      effFirstName,
+      effLastName,
+      effHeadline,
+      effLocation,
+      effCompany,
+      ...(effSkills || []),
+      effBio,
+      effResumeText,
+    ].filter(Boolean).join(' ').trim();
 
     const updatedProfile = await this.prisma.candidateProfile.update({
       where: { id: profile.id },
@@ -238,8 +269,22 @@ export class CandidateProfileService {
         mimeType: profile.resumeMimeType,
         uploadedAt: profile.resumeUploadedAt,
       },
+      visibleToRecruiters: profile.visibleToRecruiters ?? false,
+      blockedOrganisations: profile.blockedOrganisations ?? [],
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
     };
+  }
+
+  /**
+   * Returns active hiring organisations by name only (for candidate blocked-organisations picker).
+   * Strictly lists organisations by name and id; never exposes any candidates' data.
+   */
+  async getActiveOrganisations(): Promise<{ id: string; name: string }[]> {
+    return this.prisma.organisation.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
   }
 }

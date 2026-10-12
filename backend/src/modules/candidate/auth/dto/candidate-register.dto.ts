@@ -1,9 +1,5 @@
-// ============================================================
-// Clyptus Job Portal - Candidate Portal
-// DTO: Candidate Registration Request
-// ============================================================
-
 import {
+  IsBoolean,
   IsEmail,
   IsNotEmpty,
   IsOptional,
@@ -56,4 +52,9 @@ export class CandidateRegisterDto {
   @IsOptional()
   @MaxLength(30, { message: 'Phone number cannot exceed 30 characters' })
   phone?: string;
+
+  @IsBoolean({ message: 'visibleToRecruiters must be a boolean' })
+  @IsOptional()
+  visibleToRecruiters?: boolean;
 }
+

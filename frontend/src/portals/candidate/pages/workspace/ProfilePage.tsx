@@ -3,9 +3,9 @@
 // Page: ProfilePage (Candidate Profile Viewer & Editor)
 // ============================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCandidateAuth, useCandidateProfile, useCandidateResume } from '../../lib/session';
 import { candidateApi } from '../../lib/api';
 import { candidateQueryKeys } from '../../lib/queryKeys';
@@ -30,6 +30,8 @@ import {
   CheckCircle2,
   X,
   ExternalLink,
+  Shield,
+  Building2,
 } from 'lucide-react';
 
 export const ProfilePage: React.FC = () => {
@@ -37,6 +39,15 @@ export const ProfilePage: React.FC = () => {
   const { user, refetchMe } = useCandidateAuth();
   const { data: profile, isLoading, isError, error, refetch } = useCandidateProfile();
   const { data: resumeData } = useCandidateResume();
+
+  // Active organisations for blocked-organisations picker
+  const { data: orgList = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ['candidate', 'organisations'],
+    queryFn: async () => {
+      const res = await candidateApi.get<{ id: string; name: string }[]>('/candidate/profile/organisations');
+      return Array.isArray(res) ? res : [];
+    },
+  });
 
   const [form, setForm] = useState({
     firstName: '',
@@ -48,12 +59,27 @@ export const ProfilePage: React.FC = () => {
     skills: [] as string[],
     education: [] as CandidateEducationItem[],
     experience: [] as CandidateExperienceItem[],
+    visibleToRecruiters: false,
+    blockedOrganisations: [] as string[],
   });
 
   const [skillInput, setSkillInput] = useState('');
+  const [selectedOrgToBlock, setSelectedOrgToBlock] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const orgMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const org of orgList) {
+      map.set(org.id, org.name);
+    }
+    return map;
+  }, [orgList]);
+
+  const availableOrgsToBlock = useMemo(() => {
+    return orgList.filter((org) => !form.blockedOrganisations.includes(org.id));
+  }, [orgList, form.blockedOrganisations]);
 
   // Sync state when profile loads
   useEffect(() => {
@@ -68,6 +94,8 @@ export const ProfilePage: React.FC = () => {
         skills: Array.isArray(profile.skills) ? [...profile.skills] : [],
         education: Array.isArray(profile.education) ? [...profile.education] : [],
         experience: Array.isArray(profile.experience) ? [...profile.experience] : [],
+        visibleToRecruiters: Boolean(profile.visibleToRecruiters),
+        blockedOrganisations: Array.isArray(profile.blockedOrganisations) ? [...profile.blockedOrganisations] : [],
       });
     } else if (user) {
       setForm((prev) => ({
@@ -197,6 +225,23 @@ export const ProfilePage: React.FC = () => {
     );
   };
 
+  const handleAddBlockedOrg = () => {
+    if (!selectedOrgToBlock) return;
+    if (form.blockedOrganisations.includes(selectedOrgToBlock)) {
+      setSelectedOrgToBlock('');
+      return;
+    }
+    handleFieldChange('blockedOrganisations', [...form.blockedOrganisations, selectedOrgToBlock]);
+    setSelectedOrgToBlock('');
+  };
+
+  const handleRemoveBlockedOrg = (orgIdToRemove: string) => {
+    handleFieldChange(
+      'blockedOrganisations',
+      form.blockedOrganisations.filter((id) => id !== orgIdToRemove),
+    );
+  };
+
   const parseBackendValidationErrors = (err: any) => {
     const errors: Record<string, string> = {};
     const messages: string[] = [];
@@ -269,6 +314,8 @@ export const ProfilePage: React.FC = () => {
         skills: form.skills,
         education: cleanedEducation,
         experience: cleanedExperience,
+        visibleToRecruiters: form.visibleToRecruiters,
+        blockedOrganisations: form.blockedOrganisations,
       };
 
       await candidateApi.patch('/candidate/profile', payload);
@@ -472,7 +519,104 @@ export const ProfilePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Section 2: Skills */}
+        {/* Section 2: Recruiter Visibility & Privacy */}
+        <div className="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 space-y-6 shadow-sm">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-2.5">
+              <Shield className="w-5 h-5 text-orange-600" />
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Recruiter Visibility & Privacy</h2>
+                <p className="text-xs text-slate-500">Control who can discover you in the Global Talent Pool</p>
+              </div>
+            </div>
+            <Badge tone={form.visibleToRecruiters ? 'green' : 'gray'}>
+              {form.visibleToRecruiters ? 'Discoverable' : 'Private'}
+            </Badge>
+          </div>
+
+          {/* Toggle */}
+          <div className="flex items-start gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+            <input
+              type="checkbox"
+              id="visibleToRecruiters"
+              checked={form.visibleToRecruiters}
+              onChange={(e) => handleFieldChange('visibleToRecruiters', e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+            />
+            <label htmlFor="visibleToRecruiters" className="cursor-pointer">
+              <span className="text-sm font-semibold text-slate-900 block">
+                Allow verified recruiters to find and contact me (Global Talent Pool)
+              </span>
+              <span className="text-xs text-slate-500 block mt-0.5">
+                When enabled, verified recruiters can discover your headline, skills, experience, and location. Your contact details (email, phone) and resume remain private and masked until explicitly unlocked.
+              </span>
+            </label>
+          </div>
+
+          {/* Blocked Organisations Picker */}
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Block Specific Organisations</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Recruiters from blocked organisations will never be able to view, search, or discover your profile.
+              </p>
+            </div>
+
+            {/* Picker select */}
+            <div className="flex gap-2">
+              <select
+                value={selectedOrgToBlock}
+                onChange={(e) => setSelectedOrgToBlock(e.target.value)}
+                className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
+              >
+                <option value="">-- Select an organisation to block --</option>
+                {availableOrgsToBlock.map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name}
+                  </option>
+                ))}
+              </select>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!selectedOrgToBlock}
+                onClick={handleAddBlockedOrg}
+                className="whitespace-nowrap"
+              >
+                Block
+              </Button>
+            </div>
+
+            {/* Blocked Org Chips */}
+            <div className="flex flex-wrap gap-2 min-h-[36px] p-3 bg-slate-50 border border-slate-200 rounded-lg">
+              {form.blockedOrganisations.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">No organisations blocked. All verified recruiters can view your profile if discovery is enabled.</p>
+              ) : (
+                form.blockedOrganisations.map((orgId) => {
+                  const orgName = orgMap.get(orgId) || orgId;
+                  return (
+                    <span
+                      key={orgId}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-red-200 text-red-800 rounded-full text-xs font-medium shadow-2xs"
+                    >
+                      <Building2 className="w-3.5 h-3.5 text-red-500" />
+                      <span>{orgName}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveBlockedOrg(orgId)}
+                        className="text-slate-400 hover:text-red-600 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </span>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Section 3: Skills */}
         <div className="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 space-y-6 shadow-sm">
           <div className="flex items-center justify-between pb-4 border-b border-slate-100">
             <div className="flex items-center gap-2.5">
