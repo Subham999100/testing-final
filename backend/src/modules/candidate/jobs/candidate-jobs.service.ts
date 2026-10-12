@@ -67,7 +67,7 @@ function formatEmploymentType(
 }
 
 function formatExperience(min: number | null, max: number | null): string {
-  if (min != null && max != null) return `${min}–${max} yrs`;
+  if (min != null && max != null) return `${min}-${max} yrs`;
   if (min != null) return `${min}+ yrs`;
   if (max != null) return `Up to ${max} yrs`;
   return 'Not specified';
@@ -75,7 +75,7 @@ function formatExperience(min: number | null, max: number | null): string {
 
 function formatSalary(min: number | null, max: number | null, currency = 'INR'): string {
   if (min == null && max == null) return 'Competitive';
-  const symbol = currency === 'INR' ? '?' : '$';
+  const symbol = currency === 'INR' ? '\u20B9' : '$';
   const formatNum = (num: number) => {
     if (num >= 100_000) return `${(num / 100_000).toFixed(1)} LPA`;
     return num.toLocaleString();
