@@ -7,7 +7,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { CandidateJob } from '../lib/types';
-import { formatRelative } from '../lib/format';
+import { formatRelative, formatSalaryDisplay } from '../lib/format';
 import { CompanyMonogram } from './CompanyMonogram';
 import { MapPin, Briefcase, IndianRupee, Clock, ArrowRight } from 'lucide-react';
 
@@ -47,7 +47,7 @@ export const JobCard: React.FC<JobCardProps> = ({ job }) => {
           </span>
           {job.salary && job.salary !== 'Competitive' && (
             <span className="inline-flex items-center bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-md font-semibold">
-              {job.salary}
+              {formatSalaryDisplay(job.salary)}
             </span>
           )}
         </div>

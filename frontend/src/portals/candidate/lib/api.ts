@@ -70,11 +70,20 @@ candidateAxios.interceptors.response.use(
       window.dispatchEvent(new CustomEvent('clyptus:candidate-session-expired'));
     }
 
-    const serverError = error.response?.data?.error;
+    const responseData = error.response?.data;
+    const serverError = responseData?.error;
+    const resolvedMessage =
+      (typeof serverError === 'object' ? serverError?.message : null) ||
+      (typeof serverError === 'string' ? serverError : null) ||
+      (typeof responseData?.message === 'string' ? responseData.message : null) ||
+      (Array.isArray(responseData?.message) ? responseData.message.join(', ') : null) ||
+      error.message ||
+      'An unexpected error occurred';
+
     const errorPayload: ApiError = {
-      code: serverError?.code || (status ? `HTTP_${status}` : 'NETWORK_ERROR'),
-      message: serverError?.message || error.message || 'An unexpected error occurred',
-      details: serverError?.details,
+      code: (typeof serverError === 'object' ? serverError?.code : null) || (status ? `HTTP_${status}` : 'NETWORK_ERROR'),
+      message: resolvedMessage,
+      details: (typeof serverError === 'object' ? serverError?.details : null) || responseData?.details,
       status,
     };
 

@@ -26,8 +26,13 @@ export const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      await login({ email, password });
-      navigate(nextUrl, { replace: true });
+      const result = await login({ email, password });
+      const hasResume = Boolean(result.profile?.resumeFileName);
+      if (!hasResume) {
+        navigate(`/candidate/resume?next=${encodeURIComponent(nextUrl)}&onboarding=true`, { replace: true });
+      } else {
+        navigate(nextUrl, { replace: true });
+      }
     } catch (err: any) {
       setError(err?.message || 'Invalid candidate email or password');
     } finally {
@@ -90,7 +95,10 @@ export const LoginPage: React.FC = () => {
 
         <div className="text-center pt-4 border-t border-slate-100 text-sm text-slate-600">
           Don't have a candidate account?{' '}
-          <Link to="/register" className="font-semibold text-orange-600 hover:text-orange-700">
+          <Link
+            to={nextUrl && nextUrl !== '/candidate/dashboard' ? `/register?next=${encodeURIComponent(nextUrl)}` : '/register'}
+            className="font-semibold text-orange-600 hover:text-orange-700"
+          >
             Create account
           </Link>
         </div>

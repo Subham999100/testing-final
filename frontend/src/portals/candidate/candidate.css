@@ -42,6 +42,24 @@
   box-sizing: border-box;
 }
 
+/* Force Inter for all headings and body elements inside candidate portal */
+.candidate-portal h1,
+.candidate-portal h2,
+.candidate-portal h3,
+.candidate-portal h4,
+.candidate-portal h5,
+.candidate-portal h6,
+.candidate-portal p,
+.candidate-portal span,
+.candidate-portal label,
+.candidate-portal a,
+.candidate-portal button,
+.candidate-portal input,
+.candidate-portal select,
+.candidate-portal textarea {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+
 /* Custom interactive utility classes */
 .candidate-btn-cta {
   background-color: #F97316;

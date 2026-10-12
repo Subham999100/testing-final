@@ -1,17 +1,18 @@
 // ============================================================
 // Clyptus Job Portal - Candidate Portal
-// Page: JobDetailPage (Comprehensive Job Details & Apply Action)
+// Page: JobDetailPage (Comprehensive Job Details, Verification & Quick Apply Flow)
 // ============================================================
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { candidateApi } from '../../lib/api';
 import { candidateQueryKeys } from '../../lib/queryKeys';
-import { CandidateJob } from '../../lib/types';
+import { CandidateJob, CandidateApplication } from '../../lib/types';
 import { useCandidateAuth } from '../../lib/session';
 import { CompanyMonogram } from '../../components/CompanyMonogram';
-import { formatDate, formatRelative } from '../../lib/format';
+import { formatDate, formatRelative, formatSalaryDisplay } from '../../lib/format';
+import { QuickApplyModal } from '../../components/QuickApplyModal';
 import { Button, PageSkeleton } from '@/portals/org/ui/ui';
 import {
   ArrowLeft,
@@ -27,12 +28,14 @@ import {
   Building2,
   AlertTriangle,
   RefreshCw,
+  Send,
 } from 'lucide-react';
 
 export const JobDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isAuthenticated } = useCandidateAuth();
+  const [applyModalOpen, setApplyModalOpen] = useState(false);
 
   const { data: job, isLoading, isError, refetch } = useQuery({
     queryKey: candidateQueryKeys.jobs.detail(id || ''),
@@ -40,12 +43,34 @@ export const JobDetailPage: React.FC = () => {
     enabled: !!id,
   });
 
+  const { data: applications = [], refetch: refetchApplications } = useQuery({
+    queryKey: candidateQueryKeys.applications.list,
+    queryFn: () => candidateApi.get<CandidateApplication[]>('/candidate/applications'),
+    enabled: isAuthenticated,
+  });
+
+  const existingApplication = Array.isArray(applications)
+    ? applications.find((app) => app.jobId === job?.id)
+    : undefined;
+  const hasApplied = Boolean(existingApplication);
+
   const handleApplyClick = () => {
     if (!isAuthenticated) {
       navigate(`/login?next=/jobs/${id}`);
     } else {
-      // In Phase 3, this opens the Quick-Apply modal. For Phase 2, placeholder feedback or navigate.
-      navigate(`/login?next=/jobs/${id}`);
+      setApplyModalOpen(true);
+    }
+  };
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: job?.title ? `${job.title} at ${job.companyName}` : 'Job Opportunity on Clyptus',
+        url: window.location.href,
+      }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      alert('Job listing URL copied to clipboard!');
     }
   };
 
@@ -117,29 +142,67 @@ export const JobDetailPage: React.FC = () => {
               <span className="px-4 py-2 bg-slate-100 text-slate-500 text-sm font-medium rounded-xl border border-slate-200 text-center">
                 Applications Closed
               </span>
+            ) : hasApplied ? (
+              <Button
+                disabled
+                variant="secondary"
+                className="bg-emerald-50 text-emerald-800 border-emerald-200 font-semibold px-6 py-2.5 rounded-xl text-sm opacity-90 cursor-default"
+              >
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 mr-1.5" />
+                Already Applied
+              </Button>
             ) : isAuthenticated ? (
               <Button
                 variant="primary"
                 onClick={handleApplyClick}
-                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-8 py-3 rounded-xl shadow-sm text-sm"
+                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm shadow-sm flex items-center gap-2"
               >
-                Apply for this Position
+                <Send className="w-4 h-4" />
+                Apply Now
               </Button>
             ) : (
               <Link to={`/login?next=/jobs/${job.id}`}>
                 <Button
                   variant="primary"
-                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-8 py-3 rounded-xl shadow-sm text-sm w-full"
+                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm shadow-sm"
                 >
                   Sign In to Apply
                 </Button>
               </Link>
             )}
+
+            <button
+              onClick={handleShare}
+              className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 py-1.5 px-3 rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              Share position
+            </button>
           </div>
         </div>
 
-        {/* Highlight Meta Chips */}
-        <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-slate-100 text-sm text-slate-700">
+        {/* Existing Application Banner */}
+        {hasApplied && existingApplication && (
+          <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-900">
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+              <div>
+                <p className="font-bold">You applied for this position on {formatDate(existingApplication.appliedAt)}</p>
+                <p className="text-emerald-700 text-[11px] mt-0.5">Your application is currently active with the hiring organization.</p>
+              </div>
+            </div>
+            <Link
+              to={`/candidate/applications/${existingApplication.id}`}
+              className="inline-flex items-center gap-1 font-bold text-emerald-800 hover:text-emerald-950 underline self-start sm:self-auto"
+            >
+              <span>View Application Status</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        )}
+
+        {/* Meta badges */}
+        <div className="flex flex-wrap items-center gap-2.5 text-xs text-slate-600 pt-2 border-t border-slate-100">
           <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg font-medium">
             <MapPin className="w-4 h-4 text-slate-400" />
             {job.location} ({job.workMode})
@@ -150,7 +213,7 @@ export const JobDetailPage: React.FC = () => {
           </span>
           {job.salary && job.salary !== 'Competitive' && (
             <span className="inline-flex items-center bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg font-bold">
-              {job.salary}
+              {formatSalaryDisplay(job.salary)}
             </span>
           )}
           {job.openings > 1 && (
@@ -168,10 +231,10 @@ export const JobDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Two Column Layout: Description & Company Sidebar */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-        {/* Main Details (2 cols) */}
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 space-y-8 shadow-sm">
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column: Job Spec details */}
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-sm space-y-8">
           {/* Skills Required */}
           {job.skills && job.skills.length > 0 && (
             <div className="space-y-3">
@@ -251,19 +314,33 @@ export const JobDetailPage: React.FC = () => {
               <p className="font-bold text-slate-900 text-sm">Ready to take the next step?</p>
               <p className="text-xs text-slate-500">Submit your application directly to the {job.companyName} hiring team.</p>
             </div>
-            {isAuthenticated ? (
+            {isExpired ? (
+              <span className="px-4 py-2 bg-slate-100 text-slate-500 text-sm font-medium rounded-xl border border-slate-200 text-center">
+                Applications Closed
+              </span>
+            ) : hasApplied ? (
+              <Button
+                disabled
+                variant="secondary"
+                className="bg-emerald-50 text-emerald-800 border-emerald-200 font-semibold px-6 py-2.5 rounded-xl text-sm opacity-90 cursor-default"
+              >
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 mr-1.5" />
+                Already Applied
+              </Button>
+            ) : isAuthenticated ? (
               <Button
                 variant="primary"
                 onClick={handleApplyClick}
-                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm"
+                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm shadow-sm flex items-center gap-2"
               >
+                <Send className="w-4 h-4" />
                 Apply Now
               </Button>
             ) : (
               <Link to={`/login?next=/jobs/${job.id}`}>
                 <Button
                   variant="primary"
-                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm"
+                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm shadow-sm"
                 >
                   Sign In to Apply
                 </Button>
@@ -323,6 +400,19 @@ export const JobDetailPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Quick Apply Modal */}
+      {job && (
+        <QuickApplyModal
+          job={job}
+          isOpen={applyModalOpen}
+          onClose={() => setApplyModalOpen(false)}
+          onSuccess={() => {
+            setApplyModalOpen(false);
+            refetchApplications();
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -1,9 +1,10 @@
 // ============================================================
 // Clyptus Job Portal - Candidate Portal
-// Page: ResumePage (Resume Management & Upload)
+// Page: ResumePage (Resume Management, Upload & Onboarding)
 // ============================================================
 
 import React, { useRef, useState } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { candidateApi } from '../../lib/api';
 import { candidateQueryKeys } from '../../lib/queryKeys';
@@ -12,13 +13,18 @@ import { useCandidateAuth } from '../../lib/session';
 import { formatDate, formatBytes } from '../../lib/format';
 import { Button, PageSkeleton } from '@/portals/org/ui/ui';
 import { toast } from '@/portals/org/ui/toast';
-import { Download, FileText, Trash2, UploadCloud, AlertCircle } from 'lucide-react';
+import { Download, FileText, Trash2, UploadCloud, ArrowRight, CheckCircle2 } from 'lucide-react';
 
 export const ResumePage: React.FC = () => {
   const { refetchMe } = useCandidateAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const isOnboarding = searchParams.get('onboarding') === 'true';
+  const nextUrl = searchParams.get('next') || '';
 
   const { data: resume, isLoading, refetch } = useQuery({
     queryKey: candidateQueryKeys.resume,
@@ -75,13 +81,56 @@ export const ResumePage: React.FC = () => {
     }
   };
 
+  const handleProceed = () => {
+    if (nextUrl) {
+      navigate(nextUrl);
+    } else {
+      navigate('/candidate/dashboard');
+    }
+  };
+
   if (isLoading) return <PageSkeleton />;
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Manage Resume</h1>
-        <p className="text-sm text-slate-500 mt-1">Upload your resume to apply for open roles with a single click.</p>
+      {/* Onboarding Banner */}
+      {isOnboarding && (
+        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <span className="inline-block text-xs font-bold uppercase tracking-wider text-orange-700 bg-orange-100 px-2 py-0.5 rounded">
+              Welcome Onboard
+            </span>
+            <h2 className="text-base font-bold text-slate-900">Upload your resume to complete profile setup</h2>
+            <p className="text-xs text-slate-600">
+              Having an active resume lets you apply to any open position in just one click.
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            onClick={handleProceed}
+            className="text-xs whitespace-nowrap text-slate-600 hover:text-slate-900 font-semibold"
+          >
+            Skip for now
+          </Button>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Manage Resume</h1>
+          <p className="text-sm text-slate-500 mt-1">Upload your resume to apply for open roles with a single click.</p>
+        </div>
+
+        {resume?.hasResume && (isOnboarding || nextUrl) && (
+          <Button
+            variant="primary"
+            onClick={handleProceed}
+            className="bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs flex items-center gap-1.5 px-4 py-2 rounded-lg shadow-sm"
+          >
+            <span>{nextUrl ? 'Continue to Job' : 'Go to Dashboard'}</span>
+            <ArrowRight className="w-4 h-4" />
+          </Button>
+        )}
       </div>
 
       {resume?.hasResume ? (
@@ -96,7 +145,8 @@ export const ResumePage: React.FC = () => {
                 <p className="text-xs text-slate-500 mt-0.5">
                   {formatBytes(resume.fileSize)} • Uploaded {formatDate(resume.uploadedAt)}
                 </p>
-                <span className="inline-block mt-2 text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded font-medium">
+                <span className="inline-flex items-center gap-1 mt-2 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded font-medium">
+                  <CheckCircle2 className="w-3 h-3" />
                   Active Resume
                 </span>
               </div>

@@ -113,7 +113,7 @@ export const JobFilters: React.FC<JobFiltersProps> = ({
                 onClick={() => onWorkModeChange(wm.value)}
                 className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors border ${
                   active
-                    ? 'bg-blue-600 text-white border-blue-600'
+                    ? 'bg-orange-600 text-white border-orange-600'
                     : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                 }`}
               >
