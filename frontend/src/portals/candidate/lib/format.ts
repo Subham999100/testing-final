@@ -69,11 +69,6 @@ export function formatBytes(bytes?: number | null): string {
 
 export function formatSalaryDisplay(salary?: string | null): string {
   if (!salary || salary === 'Competitive') return salary || '';
-  // The rupee sign is \u20B9. When backend outputs '?' due to encoding issues,
-  // or strings like '?32.0 LPA - ?48.0 LPA', replace all '?' with '\u20B9'.
-  // Also explicitly map currency 'INR' prefix to '\u20B9'.
-  return salary
-    .replace(/\?/g, '\u20B9')
-    .replace(/\bINR\b\s*/gi, '\u20B9');
+  return salary;
 }
 

@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useCandidateAuth } from '../../lib/session';
+import { candidateApi } from '../../lib/api';
 import { Button, Input, Field } from '@/portals/org/ui/ui';
 import { Lock, Mail, AlertCircle } from 'lucide-react';
 
@@ -26,9 +27,9 @@ export const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const result = await login({ email, password });
-      const hasResume = Boolean(result.profile?.resumeFileName);
-      if (!hasResume) {
+      await login({ email, password });
+      const resumeMeta = await candidateApi.get<{ hasResume: boolean }>('/candidate/profile/resume');
+      if (!resumeMeta.hasResume) {
         navigate(`/candidate/resume?next=${encodeURIComponent(nextUrl)}&onboarding=true`, { replace: true });
       } else {
         navigate(nextUrl, { replace: true });
