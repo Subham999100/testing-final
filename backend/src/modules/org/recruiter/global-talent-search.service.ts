@@ -231,7 +231,9 @@ export class GlobalTalentSearchService {
           bio: profile.bio,
           education: profile.education,
           experience: profile.experience,
-          resumeUrl: profile.resumeStorageKey,
+          resumeUrl: (profile.resumeStorageKey && orgCandidate)
+            ? `/api/v1/org/recruiter/candidates/${orgCandidate.id}/resume/download`
+            : null,
           resumeText: profile.resumeText,
         };
       } else {
@@ -414,7 +416,9 @@ export class GlobalTalentSearchService {
           lastName: profile.user.lastName,
           email: profile.user.email,
           phone: profile.phone,
-          resumeUrl: profile.resumeStorageKey,
+          resumeUrl: profile.resumeStorageKey
+            ? `/api/v1/org/recruiter/candidates/${bridge.id}/resume/download`
+            : null,
           resumeText: profile.resumeText,
           headline: profile.headline,
           location: profile.location,
@@ -444,7 +448,9 @@ export class GlobalTalentSearchService {
             lastName: profile.user.lastName,
             email: profile.user.email,
             phone: profile.phone,
-            resumeUrl: profile.resumeStorageKey,
+            resumeUrl: profile.resumeStorageKey
+              ? `/api/v1/org/recruiter/candidates/${existingBridge.id}/resume/download`
+              : null,
             resumeText: profile.resumeText,
             headline: profile.headline,
             location: profile.location,
@@ -513,7 +519,9 @@ export class GlobalTalentSearchService {
               lastName: profile.user.lastName,
               email: profile.user.email,
               phone: profile.phone,
-              resumeUrl: profile.resumeStorageKey,
+              resumeUrl: profile.resumeStorageKey
+                ? `/api/v1/org/recruiter/candidates/${resolvedBridge.id}/resume/download`
+                : null,
               resumeText: profile.resumeText,
               headline: profile.headline,
               location: profile.location,
@@ -550,7 +558,9 @@ export class GlobalTalentSearchService {
         lastName: profile.user.lastName,
         email: profile.user.email,
         phone: profile.phone,
-        resumeUrl: profile.resumeStorageKey,
+        resumeUrl: profile.resumeStorageKey
+          ? `/api/v1/org/recruiter/candidates/${bridgeResult.id}/resume/download`
+          : null,
         resumeText: profile.resumeText,
         headline: profile.headline,
         location: profile.location,
