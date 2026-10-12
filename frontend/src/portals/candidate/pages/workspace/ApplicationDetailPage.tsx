@@ -88,23 +88,25 @@ export const ApplicationDetailPage: React.FC = () => {
           <div className="space-y-4 border-l-2 border-slate-200 ml-3 pl-4">
             <div className="relative">
               <div className="absolute -left-[23px] top-1.5 w-3 h-3 rounded-full bg-blue-600 border-2 border-white" />
-              <p className="text-sm font-semibold text-slate-900">Application Submitted</p>
+              <p className="text-sm font-semibold text-slate-900">Application submitted</p>
               <p className="text-xs text-slate-500">{formatDate(app.appliedAt)}</p>
             </div>
 
-            {app.history?.map((h) => {
-              const toStageCfg = STAGE_CONFIG[h.toStage] || { label: h.toStage, tone: 'gray' as const };
-              return (
-                <div key={h.id} className="relative">
-                  <div className="absolute -left-[23px] top-1.5 w-3 h-3 rounded-full bg-orange-600 border-2 border-white" />
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-slate-900">Advanced to {toStageCfg.label}</p>
-                    <Badge tone={toStageCfg.tone} className="text-xs">{toStageCfg.label}</Badge>
+            {[...(app.history || [])]
+              .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+              .map((h) => {
+                const toStageCfg = STAGE_CONFIG[h.toStage] || { label: h.toStage, tone: 'gray' as const };
+                return (
+                  <div key={h.id} className="relative">
+                    <div className="absolute -left-[23px] top-1.5 w-3 h-3 rounded-full bg-orange-600 border-2 border-white" />
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-900">Moved to {toStageCfg.label}</p>
+                      <Badge tone={toStageCfg.tone} className="text-xs">{toStageCfg.label}</Badge>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">{formatDate(h.createdAt)}</p>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">{formatDate(h.createdAt)}</p>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
 

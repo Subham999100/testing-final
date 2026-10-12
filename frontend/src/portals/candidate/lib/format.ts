@@ -56,6 +56,7 @@ export const STAGE_CONFIG: Record<
   OFFER: { label: 'Offer Received', tone: 'green' },
   HIRED: { label: 'Hired', tone: 'green' },
   REJECTED: { label: 'Not Selected', tone: 'red' },
+  WITHDRAWN: { label: 'Withdrawn', tone: 'gray' },
 };
 
 export function formatBytes(bytes?: number | null): string {

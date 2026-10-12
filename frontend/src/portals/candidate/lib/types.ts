@@ -12,7 +12,8 @@ export type ApplicationStage =
   | 'INTERVIEW'
   | 'OFFER'
   | 'HIRED'
-  | 'REJECTED';
+  | 'REJECTED'
+  | 'WITHDRAWN';
 
 export type WorkMode = 'Remote' | 'Hybrid' | 'On-site';
 export type EmploymentType = 'Full-time' | 'Contract' | 'Part-time' | 'Internship' | 'Temporary';
