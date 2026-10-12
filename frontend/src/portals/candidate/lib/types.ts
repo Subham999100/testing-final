@@ -131,6 +131,7 @@ export interface CandidateJobQueryParams {
   category?: string;
   page?: number;
   limit?: number;
+  sort?: string;
 }
 
 export interface CandidateApplicationHistory {
