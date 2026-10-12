@@ -5,15 +5,15 @@
 
 import React, { useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { candidateApi } from '../../lib/api';
 import { candidateQueryKeys } from '../../lib/queryKeys';
 import { CandidateResumeMetadata } from '../../lib/types';
-import { useCandidateAuth } from '../../lib/session';
+import { useCandidateAuth, useCandidateResume } from '../../lib/session';
 import { formatDate, formatBytes } from '../../lib/format';
 import { Button, PageSkeleton, ConfirmDialog } from '@/portals/org/ui/ui';
 import { toast } from '@/portals/org/ui/toast';
-import { Download, FileText, Trash2, UploadCloud, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Download, FileText, Trash2, UploadCloud, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export const ResumePage: React.FC = () => {
   const { refetchMe } = useCandidateAuth();
@@ -23,15 +23,13 @@ export const ResumePage: React.FC = () => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const isOnboarding = searchParams.get('onboarding') === 'true';
   const nextUrl = searchParams.get('next') || '';
 
-  const { data: resume, isLoading, refetch } = useQuery({
-    queryKey: candidateQueryKeys.resume,
-    queryFn: () => candidateApi.get<CandidateResumeMetadata>('/candidate/profile/resume'),
-  });
+  const { data: resume, isLoading, isError, error, refetch } = useCandidateResume();
 
   const handleFileUpload = async (file: File) => {
     if (!file) return;
@@ -52,6 +50,9 @@ export const ResumePage: React.FC = () => {
         setUploadProgress(p);
       });
       toast.success('Resume uploaded successfully to secure vault');
+      await queryClient.invalidateQueries({ queryKey: candidateQueryKeys.resume });
+      await queryClient.invalidateQueries({ queryKey: candidateQueryKeys.me });
+      await queryClient.invalidateQueries({ queryKey: candidateQueryKeys.profile });
       await refetch();
       await refetchMe();
     } catch (err: any) {
@@ -77,6 +78,9 @@ export const ResumePage: React.FC = () => {
       await candidateApi.delete('/candidate/profile/resume');
       toast.success('Resume deleted successfully');
       setDeleteConfirmOpen(false);
+      await queryClient.invalidateQueries({ queryKey: candidateQueryKeys.resume });
+      await queryClient.invalidateQueries({ queryKey: candidateQueryKeys.me });
+      await queryClient.invalidateQueries({ queryKey: candidateQueryKeys.profile });
       await refetch();
       await refetchMe();
     } catch (err: any) {
@@ -95,6 +99,23 @@ export const ResumePage: React.FC = () => {
   };
 
   if (isLoading) return <PageSkeleton />;
+
+  if (isError) {
+    return (
+      <div className="bg-white border border-red-200 rounded-xl p-8 text-center space-y-4 max-w-xl mx-auto my-12">
+        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+          <AlertCircle className="w-6 h-6" />
+        </div>
+        <h3 className="text-lg font-semibold text-slate-800">Unable to load resume</h3>
+        <p className="text-sm text-slate-500 max-w-sm mx-auto">
+          {(error as any)?.message || 'A network error occurred while connecting to the resume vault.'}
+        </p>
+        <Button onClick={() => refetch()} variant="secondary">
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-3xl">

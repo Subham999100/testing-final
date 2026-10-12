@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { candidateApi } from '../lib/api';
 import { candidateQueryKeys } from '../lib/queryKeys';
 import { CandidateJob, CandidateResumeMetadata } from '../lib/types';
-import { useCandidateAuth } from '../lib/session';
+import { useCandidateAuth, useCandidateResume } from '../lib/session';
 import { formatBytes, formatDate } from '../lib/format';
 import { Button } from '@/portals/org/ui/ui';
 import { toast } from '@/portals/org/ui/toast';
@@ -45,12 +45,8 @@ export const QuickApplyModal: React.FC<QuickApplyModalProps> = ({
   const [uploadingResume, setUploadingResume] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch candidate's active resume status
-  const { data: resumeData, refetch: refetchResume } = useQuery({
-    queryKey: candidateQueryKeys.resume,
-    queryFn: () => candidateApi.get<CandidateResumeMetadata>('/candidate/profile/resume'),
-    enabled: isOpen,
-  });
+  // Fetch candidate's active resume status via shared hook
+  const { data: resumeData, refetch: refetchResume } = useCandidateResume();
 
   if (!isOpen) return null;
 
@@ -71,6 +67,9 @@ export const QuickApplyModal: React.FC<QuickApplyModalProps> = ({
     try {
       await candidateApi.upload('/candidate/profile/resume', formData);
       toast.success('Resume uploaded successfully');
+      await queryClient.invalidateQueries({ queryKey: candidateQueryKeys.resume });
+      await queryClient.invalidateQueries({ queryKey: candidateQueryKeys.me });
+      await queryClient.invalidateQueries({ queryKey: candidateQueryKeys.profile });
       await refetchResume();
       await refetchMe();
     } catch (err: any) {

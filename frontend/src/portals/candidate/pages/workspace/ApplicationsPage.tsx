@@ -10,16 +10,33 @@ import { candidateApi } from '../../lib/api';
 import { candidateQueryKeys } from '../../lib/queryKeys';
 import { CandidateApplication } from '../../lib/types';
 import { STAGE_CONFIG, formatDate } from '../../lib/format';
-import { PageSkeleton, Badge } from '@/portals/org/ui/ui';
-import { Briefcase, ArrowRight } from 'lucide-react';
+import { PageSkeleton, Badge, Button } from '@/portals/org/ui/ui';
+import { Briefcase, ArrowRight, AlertCircle } from 'lucide-react';
 
 export const ApplicationsPage: React.FC = () => {
-  const { data: applications, isLoading } = useQuery({
+  const { data: applications, isLoading, isError, error, refetch } = useQuery({
     queryKey: candidateQueryKeys.applications.list,
     queryFn: () => candidateApi.get<CandidateApplication[]>('/candidate/applications'),
   });
 
   if (isLoading) return <PageSkeleton />;
+
+  if (isError) {
+    return (
+      <div className="bg-white border border-red-200 rounded-xl p-8 text-center space-y-4 max-w-xl mx-auto my-12">
+        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+          <AlertCircle className="w-6 h-6" />
+        </div>
+        <h3 className="text-lg font-semibold text-slate-800">Unable to load applications</h3>
+        <p className="text-sm text-slate-500 max-w-sm mx-auto">
+          {(error as any)?.message || 'A network error occurred while retrieving your applications.'}
+        </p>
+        <Button onClick={() => refetch()} variant="secondary">
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

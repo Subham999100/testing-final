@@ -5,13 +5,17 @@
 
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCandidateAuth } from '../../lib/session';
 import { candidateApi } from '../../lib/api';
+import { candidateQueryKeys } from '../../lib/queryKeys';
+import { CandidateResumeMetadata } from '../../lib/types';
 import { Button, Input, Field } from '@/portals/org/ui/ui';
 import { Lock, Mail, AlertCircle } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const { login } = useCandidateAuth();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
   const nextUrl = new URLSearchParams(location.search).get('next') || (location.state as any)?.from || '/candidate/dashboard';
@@ -28,8 +32,11 @@ export const LoginPage: React.FC = () => {
 
     try {
       await login({ email, password });
-      const resumeMeta = await candidateApi.get<{ hasResume: boolean }>('/candidate/profile/resume');
-      if (!resumeMeta.hasResume) {
+      const resumeMeta = await queryClient.fetchQuery({
+        queryKey: candidateQueryKeys.resume,
+        queryFn: () => candidateApi.get<CandidateResumeMetadata>('/candidate/profile/resume'),
+      });
+      if (!resumeMeta?.hasResume) {
         navigate(`/candidate/resume?next=${encodeURIComponent(nextUrl)}&onboarding=true`, { replace: true });
       } else {
         navigate(nextUrl, { replace: true });

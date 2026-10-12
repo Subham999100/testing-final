@@ -30,12 +30,13 @@ export interface CandidateEducationItem {
 
 export interface CandidateExperienceItem {
   id?: string;
-  title?: string;
   company?: string;
+  jobTitle?: string;
+  employmentType?: string;
   location?: string;
   startDate?: string;
   endDate?: string;
-  current?: boolean;
+  currentJob?: boolean;
   description?: string;
 }
 
@@ -52,6 +53,29 @@ export interface CandidateProfile {
   experience?: CandidateExperienceItem[] | null;
   resumeFileName?: string | null;
   resumeUploadedAt?: string | null;
+}
+
+export interface CandidateFullProfile {
+  id: string;
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  role: UserRole;
+  isEmailVerified: boolean;
+  phone: string | null;
+  headline: string | null;
+  location: string | null;
+  experienceYears: number | null;
+  currentCompany: string | null;
+  skills: string[];
+  bio: string | null;
+  education: CandidateEducationItem[];
+  experience: CandidateExperienceItem[];
+  resume: CandidateResumeMetadata;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CandidateUser {
@@ -197,4 +221,5 @@ export interface ApiError {
   message?: string;
   details?: unknown;
   status?: number;
+  rawMessages?: string[];
 }

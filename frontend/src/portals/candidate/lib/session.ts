@@ -16,10 +16,42 @@ import { candidateApi, clearCandidateToken, getCandidateToken, setCandidateToken
 import { candidateQueryKeys } from './queryKeys';
 import {
   CandidateAuthResult,
+  CandidateFullProfile,
   CandidateLoginRequest,
   CandidateMeResult,
   CandidateRegisterRequest,
+  CandidateResumeMetadata,
 } from './types';
+
+export function useCandidateResume() {
+  const token = getCandidateToken();
+
+  return useQuery({
+    queryKey: candidateQueryKeys.resume,
+    queryFn: () => candidateApi.get<CandidateResumeMetadata>('/candidate/profile/resume'),
+    enabled: !!token,
+    staleTime: 60 * 1000,
+    retry: (failureCount, error: any) => {
+      if (error?.status === 401 || error?.status === 403) return false;
+      return failureCount < 2;
+    },
+  });
+}
+
+export function useCandidateProfile() {
+  const token = getCandidateToken();
+
+  return useQuery({
+    queryKey: candidateQueryKeys.profile,
+    queryFn: () => candidateApi.get<CandidateFullProfile>('/candidate/profile'),
+    enabled: !!token,
+    staleTime: 60 * 1000,
+    retry: (failureCount, error: any) => {
+      if (error?.status === 401 || error?.status === 403) return false;
+      return failureCount < 2;
+    },
+  });
+}
 
 export function useCandidateMe() {
   const token = getCandidateToken();

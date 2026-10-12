@@ -85,6 +85,7 @@ candidateAxios.interceptors.response.use(
       message: resolvedMessage,
       details: (typeof serverError === 'object' ? serverError?.details : null) || responseData?.details,
       status,
+      rawMessages: Array.isArray(responseData?.message) ? responseData.message : undefined,
     };
 
     return Promise.reject(errorPayload);
