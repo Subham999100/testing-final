@@ -64,6 +64,10 @@ describe('CandidateProfileService', () => {
         update: jest.fn(),
         findUnique: jest.fn(),
       },
+      candidate: {
+        findMany: jest.fn().mockResolvedValue([]),
+        update: jest.fn().mockResolvedValue({}),
+      },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -168,6 +172,73 @@ describe('CandidateProfileService', () => {
           }),
         }),
       );
+    });
+
+    it('should sync candidate-owned fields to CANDIDATE_PORTAL ATS records', async () => {
+      prisma.user.findUnique.mockResolvedValue(mockUser);
+      prisma.candidateProfile.update.mockResolvedValue({
+        ...mockUser.candidateProfile,
+        headline: 'Lead Engineer',
+        location: 'Bengaluru',
+        skills: ['TypeScript', 'NestJS'],
+      });
+      prisma.candidate.findMany.mockResolvedValue([
+        {
+          id: 'ats_cand_1',
+          userId: mockActor.userId,
+          source: 'CANDIDATE_PORTAL',
+          headline: 'Junior Dev',
+          location: 'Delhi',
+          skills: ['JavaScript'],
+        },
+      ]);
+
+      await service.updateProfile(mockActor, {
+        headline: 'Lead Engineer',
+        location: 'Bengaluru',
+        skills: ['TypeScript', 'NestJS'],
+      });
+
+      expect(prisma.candidate.update).toHaveBeenCalledWith({
+        where: { id: 'ats_cand_1' },
+        data: expect.objectContaining({
+          headline: 'Lead Engineer',
+          location: 'Bengaluru',
+          skills: ['TypeScript', 'NestJS'],
+        }),
+      });
+    });
+
+    it('should preserve recruiter-entered fields on SOURCED ATS records', async () => {
+      prisma.user.findUnique.mockResolvedValue(mockUser);
+      prisma.candidateProfile.update.mockResolvedValue({
+        ...mockUser.candidateProfile,
+        headline: 'Lead Engineer',
+        location: 'Bengaluru',
+      });
+      prisma.candidate.findMany.mockResolvedValue([
+        {
+          id: 'ats_cand_sourced',
+          userId: mockActor.userId,
+          source: 'SOURCED',
+          headline: 'Recruiter Verified Staff Architect', // Non-empty recruiter field
+          location: null, // Empty field
+          skills: ['Rust'],
+        },
+      ]);
+
+      await service.updateProfile(mockActor, {
+        headline: 'Lead Engineer',
+        location: 'Bengaluru',
+      });
+
+      expect(prisma.candidate.update).toHaveBeenCalledWith({
+        where: { id: 'ats_cand_sourced' },
+        data: {
+          location: 'Bengaluru', // Only empty field filled
+          resumeUrl: 'resumes/cand_1/key.pdf', // Empty resume filled from profile
+        },
+      });
     });
 
     it('should throw UnauthorizedException if actor is not a CANDIDATE', async () => {

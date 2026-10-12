@@ -152,22 +152,57 @@ export class CandidateProfileService {
     });
 
     // Synchronize updates across any existing ATS Candidate records linked to this candidate
+    // POLICY NOTE:
+    // 1. Sync is strictly limited to candidate-owned profile fields: headline, skills, location, experienceYears, currentCompany, resume fields, phone, name.
+    // 2. Recruiter-owned data (notes, tags, status, folders, assigned recruiter, stage) is NEVER touched.
+    // 3. For recruiter-sourced records (source !== 'CANDIDATE_PORTAL'), existing non-empty recruiter-entered fields are preserved and never overwritten.
+    // 4. For portal-originated records (source === 'CANDIDATE_PORTAL'), self-reported candidate updates take effect.
     try {
-      const atsUpdateData: any = {};
-      if (newFirstName) atsUpdateData.firstName = newFirstName.trim();
-      if (newLastName) atsUpdateData.lastName = newLastName.trim();
-      if (dto.phone !== undefined) atsUpdateData.phone = dto.phone;
-      if (dto.headline !== undefined) atsUpdateData.headline = dto.headline;
-      if (dto.location !== undefined) atsUpdateData.location = dto.location;
-      if (dto.experienceYears !== undefined) atsUpdateData.experienceYears = dto.experienceYears;
-      if (dto.currentCompany !== undefined) atsUpdateData.currentCompany = dto.currentCompany;
-      if (dto.skills !== undefined) atsUpdateData.skills = updateData.skills;
+      const linkedCandidates = await this.prisma.candidate.findMany({
+        where: { userId: actor.userId },
+      });
 
-      if (Object.keys(atsUpdateData).length > 0) {
-        await this.prisma.candidate.updateMany({
-          where: { userId: actor.userId },
-          data: atsUpdateData,
-        });
+      for (const atsCandidate of linkedCandidates) {
+        const atsUpdateData: any = {};
+        const isRecruiterSourced = atsCandidate.source !== 'CANDIDATE_PORTAL';
+
+        if (newFirstName && (!isRecruiterSourced || !atsCandidate.firstName)) {
+          atsUpdateData.firstName = newFirstName.trim();
+        }
+        if (newLastName && (!isRecruiterSourced || !atsCandidate.lastName)) {
+          atsUpdateData.lastName = newLastName.trim();
+        }
+        if (dto.phone !== undefined && (!isRecruiterSourced || !atsCandidate.phone)) {
+          atsUpdateData.phone = dto.phone;
+        }
+        if (dto.headline !== undefined && (!isRecruiterSourced || !atsCandidate.headline)) {
+          atsUpdateData.headline = dto.headline;
+        }
+        if (dto.location !== undefined && (!isRecruiterSourced || !atsCandidate.location)) {
+          atsUpdateData.location = dto.location;
+        }
+        if (dto.experienceYears !== undefined && (!isRecruiterSourced || atsCandidate.experienceYears == null)) {
+          atsUpdateData.experienceYears = dto.experienceYears;
+        }
+        if (dto.currentCompany !== undefined && (!isRecruiterSourced || !atsCandidate.currentCompany)) {
+          atsUpdateData.currentCompany = dto.currentCompany;
+        }
+        if (dto.skills !== undefined && (!isRecruiterSourced || !atsCandidate.skills || atsCandidate.skills.length === 0)) {
+          atsUpdateData.skills = updateData.skills;
+        }
+        if (updatedProfile.resumeStorageKey && (!isRecruiterSourced || !atsCandidate.resumeUrl)) {
+          atsUpdateData.resumeUrl = updatedProfile.resumeStorageKey;
+        }
+        if (updatedProfile.resumeText && (!isRecruiterSourced || !atsCandidate.resumeText)) {
+          atsUpdateData.resumeText = updatedProfile.resumeText;
+        }
+
+        if (Object.keys(atsUpdateData).length > 0) {
+          await this.prisma.candidate.update({
+            where: { id: atsCandidate.id },
+            data: atsUpdateData,
+          });
+        }
       }
     } catch (syncErr: any) {
       this.logger.warn(`Failed to sync linked ATS candidate records: ${syncErr.message}`);
