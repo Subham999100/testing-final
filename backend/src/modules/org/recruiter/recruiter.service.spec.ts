@@ -9,7 +9,7 @@ const ctx = {
   role: 'RECRUITER',
 } as OrgContext;
 function setup() {
-  const prisma = {
+  const prisma: any = {
     recruiterFolder: { findFirst: jest.fn() },
     candidate: { count: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
     recruiterFolderCandidate: { createMany: jest.fn(), deleteMany: jest.fn() },
@@ -18,14 +18,28 @@ function setup() {
       count: jest.fn().mockResolvedValue(0),
       create: jest.fn().mockResolvedValue({}),
     },
+    recruiterDownload: { upsert: jest.fn().mockResolvedValue({}) },
     $queryRaw: jest.fn().mockResolvedValue([]),
     $transaction: jest.fn().mockResolvedValue([[{ total: 0n }], []]),
   };
-  const candidates = { findInOrg: jest.fn().mockResolvedValue({ id: 'candidate-a', skills: ['Java'] }) };
+  const candidates: any = {
+    findInOrg: jest.fn().mockResolvedValue({ id: 'candidate-a', skills: ['Java'] }),
+    isUnlocked: jest.fn().mockResolvedValue(false),
+  };
+  const cloudStorage = {
+    retrievePrivateObject: jest.fn().mockResolvedValue({
+      buffer: Buffer.from('%PDF-1.4 mock content'),
+      contentType: 'application/pdf',
+      contentLength: 22,
+    }),
+  };
+  const events = { audit: jest.fn().mockResolvedValue(undefined) };
   return {
     prisma,
     candidates,
-    service: new RecruiterService(prisma as never, candidates as never, {} as never, {} as never),
+    cloudStorage,
+    events,
+    service: new RecruiterService(prisma as never, candidates as never, events as never, {} as never, cloudStorage as never),
   };
 }
 describe('Recruiter tenant and owner boundaries', () => {
@@ -114,3 +128,52 @@ describe('Contact unlock permission regression', () => {
     expect(prisma.tokenTransaction.findMany).not.toHaveBeenCalled();
   });
 });
+
+describe('Recruiter downloadResume authenticated streaming', () => {
+  it('rejects download when candidate contact is not unlocked', async () => {
+    const { service, candidates } = setup();
+    candidates.findInOrg.mockResolvedValue({ id: 'c-1', firstName: 'Jane', lastName: 'Doe', resumeUrl: 'resumes/c1.pdf' });
+    candidates.isUnlocked = jest.fn().mockResolvedValue(false);
+
+    const mockRes = { setHeader: jest.fn(), send: jest.fn() };
+    await expect(service.downloadResume(ctx, 'c-1', mockRes as never)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('rejects download when user lacks candidates.resume.view permission', async () => {
+    const { service, candidates } = setup();
+    candidates.findInOrg.mockResolvedValue({ id: 'c-1', firstName: 'Jane', lastName: 'Doe', resumeUrl: 'resumes/c1.pdf' });
+    candidates.isUnlocked = jest.fn().mockResolvedValue(true);
+
+    const noPermCtx = { ...ctx, permissions: ['candidates.read'] } as OrgContext;
+    const mockRes = { setHeader: jest.fn(), send: jest.fn() };
+    await expect(service.downloadResume(noPermCtx, 'c-1', mockRes as never)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('streams resume buffer with headers and records download when unlocked and permitted', async () => {
+    const { service, candidates, cloudStorage, prisma } = setup();
+    prisma.recruiterDownload = { upsert: jest.fn().mockResolvedValue({}) };
+    candidates.findInOrg.mockResolvedValue({
+      id: 'c-1',
+      firstName: 'Jane',
+      lastName: 'Doe',
+      resumeUrl: 'resumes/c1.pdf',
+    });
+    candidates.isUnlocked = jest.fn().mockResolvedValue(true);
+
+    const permittedCtx = { ...ctx, permissions: ['candidates.resume.view'] } as OrgContext;
+    const mockRes = { setHeader: jest.fn(), send: jest.fn() };
+
+    await service.downloadResume(permittedCtx, 'c-1', mockRes as never);
+
+    expect(cloudStorage.retrievePrivateObject).toHaveBeenCalledWith('resumes/c1.pdf');
+    expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
+    expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Disposition', 'attachment; filename="Jane_Doe_Resume.pdf"');
+    expect(mockRes.send).toHaveBeenCalledWith(expect.any(Buffer));
+    expect(prisma.recruiterDownload.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId_candidateId: { userId: 'member-a', candidateId: 'c-1' } },
+      }),
+    );
+  });
+});
+

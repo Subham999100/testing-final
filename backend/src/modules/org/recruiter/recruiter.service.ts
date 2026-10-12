@@ -5,8 +5,10 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { Response } from "express";
+import * as path from "path";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../../database/prisma.service";
+import { CloudStorageService } from "../../../integrations/storage/storage.service";
 import { OrgContext, can } from "../common/org-context";
 import { OrgEventsService } from "../common/org-events.service";
 import { jobScope, pageResult } from "../common/org-helpers";
@@ -43,6 +45,7 @@ export class RecruiterService {
     private readonly candidates: CandidatesService,
     private readonly events: OrgEventsService,
     private readonly ai: AiService,
+    private readonly cloudStorage?: CloudStorageService,
   ) {}
   private async folder(ctx: OrgContext, id: string) {
     const row = await this.prisma.recruiterFolder.findFirst({
@@ -575,14 +578,20 @@ export class RecruiterService {
   async downloadResume(ctx: OrgContext, id: string, res: Response) {
     const candidate = await this.candidates.findInOrg(ctx, id);
     const isUnlocked = await this.candidates.isUnlocked(ctx, id);
-    if (!isUnlocked && !can(ctx, "candidates.resume.view")) {
+    if (!isUnlocked) {
       throw new ForbiddenException(
-        "Resume access permission required or contact must be unlocked",
+        "Candidate contact must be unlocked before downloading resume",
+      );
+    }
+    if (!can(ctx, "candidates.resume.view")) {
+      throw new ForbiddenException(
+        "Resume access permission required",
       );
     }
     if (!candidate.resumeUrl && !candidate.resumeText) {
       throw new NotFoundException("No resume available for this candidate");
     }
+
     await this.prisma.recruiterDownload.upsert({
       where: { userId_candidateId: { userId: ctx.userId, candidateId: id } },
       create: {
@@ -592,13 +601,50 @@ export class RecruiterService {
       },
       update: { downloadedAt: new Date() },
     });
+    await this.events.audit(ctx, "CANDIDATE_RESUME_DOWNLOADED", "CANDIDATE", id, {
+      candidateId: id,
+    });
+
     if (candidate.resumeUrl) {
-      return res.redirect(candidate.resumeUrl);
+      const cleanKey = candidate.resumeUrl.replace(/^private:\/\//, "").replace(/^[/\\]+/, "");
+      try {
+        const storedObject = await this.cloudStorage.retrievePrivateObject(cleanKey);
+
+        let ext = ".pdf";
+        if (storedObject.contentType === "application/pdf") ext = ".pdf";
+        else if (storedObject.contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") ext = ".docx";
+        else if (storedObject.contentType === "application/msword") ext = ".doc";
+        else if (storedObject.contentType === "text/plain") ext = ".txt";
+        else {
+          const parsedExt = path.extname(cleanKey);
+          if (parsedExt) ext = parsedExt;
+        }
+
+        const safeCandidateName = `${candidate.firstName || "Candidate"}_${candidate.lastName || ""}`.trim().replace(/[^a-zA-Z0-9_-]/g, "_");
+        const fileName = `${safeCandidateName}_Resume${ext}`;
+
+        res.setHeader("Content-Type", storedObject.contentType || "application/octet-stream");
+        res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+        res.setHeader("Content-Length", storedObject.contentLength);
+        return res.send(storedObject.buffer);
+      } catch (err: any) {
+        if (candidate.resumeText) {
+          const safeName = `${candidate.firstName || "Candidate"}_${candidate.lastName || ""}`.trim().replace(/[^a-zA-Z0-9_-]/g, "_");
+          res.setHeader("Content-Type", "text/plain; charset=utf-8");
+          res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="${safeName}_Resume.txt"`,
+          );
+          return res.send(candidate.resumeText);
+        }
+        throw new NotFoundException("Resume file not found in storage");
+      }
     } else {
+      const safeName = `${candidate.firstName || "Candidate"}_${candidate.lastName || ""}`.trim().replace(/[^a-zA-Z0-9_-]/g, "_");
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename="${candidate.firstName}_${candidate.lastName}_Resume.txt"`,
+        `attachment; filename="${safeName}_Resume.txt"`,
       );
       return res.send(candidate.resumeText);
     }

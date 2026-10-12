@@ -5,7 +5,7 @@
 
 import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { EmploymentType, JobStatus, WorkMode } from '@prisma/client';
+import { EmploymentType, JobStatus, OrganisationStatus, WorkMode } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 import { CandidateJobsService } from './candidate-jobs.service';
 
@@ -52,6 +52,7 @@ describe('CandidateJobsService', () => {
       organisation: {
         findMany: jest.fn().mockResolvedValue([mockOrg]),
         findUnique: jest.fn().mockResolvedValue(mockOrg),
+        findFirst: jest.fn().mockResolvedValue(mockOrg),
       },
     };
 
@@ -82,20 +83,37 @@ describe('CandidateJobsService', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           status: JobStatus.PUBLISHED,
+          organisationId: { in: ['org_1'] },
           location: { contains: 'Bengaluru', mode: 'insensitive' },
         }),
       }),
     );
   });
 
-  it('should return a published job by ID', async () => {
+  it('should return a published job by ID using get and findById', async () => {
     const result = await service.get('job_1');
     expect(result.id).toBe('job_1');
     expect(result.title).toBe('Senior Full Stack Engineer');
     expect(result.companyName).toBe('Clyptus Hiring Partner');
+
+    const result2 = await service.findById('job_1');
+    expect(result2.id).toBe('job_1');
+    expect(prisma.job.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'job_1',
+        status: JobStatus.PUBLISHED,
+      },
+    });
+    expect(prisma.organisation.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'org_1',
+        status: OrganisationStatus.ACTIVE,
+      },
+      select: { name: true },
+    });
   });
 
-  it('should throw NotFoundException if job is not found', async () => {
+  it('should throw NotFoundException if job is not found or organisation is not active', async () => {
     prisma.job.findFirst.mockResolvedValue(null);
     await expect(service.get('job_nonexistent')).rejects.toThrow(NotFoundException);
   });

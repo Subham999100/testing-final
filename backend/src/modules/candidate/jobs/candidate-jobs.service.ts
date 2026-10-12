@@ -5,7 +5,7 @@
 // ============================================================
 
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { EmploymentType, JobStatus, Prisma, WorkMode } from '@prisma/client';
+import { EmploymentType, JobStatus, OrganisationStatus, Prisma, WorkMode } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 import { CandidateJobQueryDto } from './candidate-jobs.dto';
 
@@ -96,8 +96,15 @@ export class CandidateJobsService {
     const limit = Math.min(100, Math.max(1, Number(q.limit) || 20));
     const skip = (page - 1) * limit;
 
+    const activeOrgs = await this.prisma.organisation.findMany({
+      where: { status: OrganisationStatus.ACTIVE },
+      select: { id: true },
+    });
+    const activeOrgIds = activeOrgs.map((o) => o.id);
+
     const where: Prisma.JobWhereInput = {
       status: JobStatus.PUBLISHED,
+      organisationId: { in: activeOrgIds },
       OR: [
         { deadline: null },
         { deadline: { gte: new Date() } },
@@ -190,12 +197,19 @@ export class CandidateJobsService {
       throw new NotFoundException('Job not found or no longer open');
     }
 
-    const org = await this.prisma.organisation.findUnique({
-      where: { id: job.organisationId },
+    const org = await this.prisma.organisation.findFirst({
+      where: { id: job.organisationId, status: OrganisationStatus.ACTIVE },
       select: { name: true },
     });
+    if (!org) {
+      throw new NotFoundException('Job not found or no longer open');
+    }
 
     return this.formatJob(job, org?.name);
+  }
+
+  async findById(id: string): Promise<FormattedCandidateJob> {
+    return this.get(id);
   }
 
   private formatJob(job: any, companyName?: string): FormattedCandidateJob {

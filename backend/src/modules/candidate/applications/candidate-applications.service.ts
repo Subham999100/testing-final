@@ -12,7 +12,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ApplicationStage, JobStatus, Prisma, UserRole } from '@prisma/client';
+import { ApplicationStage, JobStatus, OrganisationStatus, Prisma, UserRole } from '@prisma/client';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { PrismaService } from '../../../database/prisma.service';
 import { AuditService } from '../../audit/audit.service';
@@ -68,6 +68,15 @@ export class CandidateApplicationsService {
     });
 
     if (!job || job.status !== JobStatus.PUBLISHED) {
+      throw new NotFoundException('The requested job is not available for applications');
+    }
+
+    const org = await this.prisma.organisation.findFirst({
+      where: { id: job.organisationId, status: OrganisationStatus.ACTIVE },
+      select: { id: true },
+    });
+
+    if (!org) {
       throw new NotFoundException('The requested job is not available for applications');
     }
 

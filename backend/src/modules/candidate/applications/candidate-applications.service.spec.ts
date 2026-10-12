@@ -5,7 +5,7 @@
 
 import { ConflictException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { ApplicationStage, JobStatus, Prisma, UserRole } from '@prisma/client';
+import { ApplicationStage, JobStatus, OrganisationStatus, Prisma, UserRole } from '@prisma/client';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { PrismaService } from '../../../database/prisma.service';
 import { AuditService } from '../../audit/audit.service';
@@ -33,6 +33,7 @@ describe('CandidateApplicationsService', () => {
     location: 'Hyderabad',
     status: JobStatus.PUBLISHED,
     deadline: null,
+    organisation: { id: 'org_1', status: OrganisationStatus.ACTIVE },
   };
 
   const mockUser = {
@@ -100,6 +101,7 @@ describe('CandidateApplicationsService', () => {
       },
       organisation: {
         findUnique: jest.fn().mockResolvedValue({ id: 'org_1', name: 'Org Alpha' }),
+        findFirst: jest.fn().mockResolvedValue({ id: 'org_1', name: 'Org Alpha' }),
         findMany: jest.fn().mockResolvedValue([{ id: 'org_1', name: 'Org Alpha' }]),
       },
       candidateProfile: {
@@ -203,6 +205,11 @@ describe('CandidateApplicationsService', () => {
 
   it('should throw NotFoundException if job is not published', async () => {
     prisma.job.findUnique.mockResolvedValue({ ...mockJob, status: JobStatus.CLOSED });
+    await expect(service.create(mockActor, { jobId: 'job_1' })).rejects.toThrow(NotFoundException);
+  });
+
+  it('should throw NotFoundException if organisation is suspended or not active', async () => {
+    prisma.organisation.findFirst.mockResolvedValue(null);
     await expect(service.create(mockActor, { jobId: 'job_1' })).rejects.toThrow(NotFoundException);
   });
 

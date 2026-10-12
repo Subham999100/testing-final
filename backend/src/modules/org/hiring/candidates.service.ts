@@ -59,6 +59,10 @@ export class CandidatesService {
   }
 
   async isUnlocked(ctx: OrgContext, id: string): Promise<boolean> {
+    const hasApplication = await this.prisma.application.count({
+      where: { AND: [applicationScope(ctx), { candidateId: id }] },
+    });
+    if (hasApplication > 0) return true;
     const set = await this.unlockedSet([id]);
     return set.has(id);
   }
