@@ -177,3 +177,15 @@ describe('Recruiter downloadResume authenticated streaming', () => {
   });
 });
 
+describe('Recruiter search targeting resume text', () => {
+  it('targets resumeText column when searchIn is resume', async () => {
+    const { service, prisma } = setup();
+    await service.search(ctx, { search: 'DockerKubernetesCert', searchIn: 'resume', page: 1, limit: 20 });
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+    const countSql = prisma.$queryRaw.mock.calls[0][0];
+    const dataSql = prisma.$queryRaw.mock.calls[1][0];
+    expect(countSql.text).toContain('coalesce(c."resumeText", \'\')');
+    expect(dataSql.text).toContain('coalesce(c."resumeText", \'\')');
+  });
+});
+

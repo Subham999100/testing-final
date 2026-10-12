@@ -130,3 +130,5 @@ The frontend will run on `http://localhost:5173/` and proxies/calls API requests
    Inbound applicants who submitted an application to an organisation are free to view by that organisation (`unlockCost = 0`, no token charges). External sourced talent remains token-gated (2 tokens per resume unlock).
 6. **Out of Scope Features:**
    Saved jobs bookmarks, candidate profile photos, real-time chat, interview scheduling self-service, and in-app notifications are intentionally omitted from Candidate Portal MVP.
+7. **Resume Text Extraction & Legacy .doc Files:**
+   Resume text is extracted automatically from uploaded PDF and DOCX files (capped at 200,000 characters with a 10s timeout, non-blocking upload failure safety). Legacy binary `.doc` files yield `null` extracted text. Text extraction never logs resume text to system logs.

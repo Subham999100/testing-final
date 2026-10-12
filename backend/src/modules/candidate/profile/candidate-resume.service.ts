@@ -51,6 +51,69 @@ export interface CandidateResumeDownloadResult {
 }
 
 const ALLOWED_RESUME_EXTENSIONS = ['.pdf', '.doc', '.docx', '.txt'];
+const MAX_RESUME_TEXT_LENGTH = 200_000;
+const EXTRACTION_TIMEOUT_MS = 10_000;
+
+/**
+ * Extracts text from resume document buffer with strict character cap and timeout.
+ * Never throws; returns null on failure. Never logs resume text content.
+ */
+async function extractTextFromDocument(
+  ext: string,
+  buffer: Buffer,
+  logger: Logger,
+): Promise<string | null> {
+  if (ext === '.txt') {
+    return buffer.toString('utf8').trim().slice(0, MAX_RESUME_TEXT_LENGTH) || null;
+  }
+  if (ext === '.doc') {
+    // Note: Legacy binary .doc format yields null text
+    logger.log('Legacy .doc binary format encountered; skipping text extraction');
+    return null;
+  }
+
+  if (ext === '.pdf') {
+    let timer: NodeJS.Timeout;
+    try {
+      const pdfParse = require('pdf-parse/lib/pdf-parse.js');
+      const parsePromise = pdfParse(buffer);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('PDF extraction timed out after 10s')), EXTRACTION_TIMEOUT_MS);
+      });
+
+      const data: any = await Promise.race([parsePromise, timeoutPromise]);
+      clearTimeout(timer!);
+      const text = (data?.text || '').trim().slice(0, MAX_RESUME_TEXT_LENGTH);
+      return text || null;
+    } catch (err: any) {
+      clearTimeout(timer!);
+      logger.warn(`PDF text extraction failed: ${err.message || 'unknown error'}`);
+      return null;
+    }
+  }
+
+  if (ext === '.docx') {
+    let timer: NodeJS.Timeout;
+    try {
+      const mammoth = require('mammoth');
+      const parsePromise = mammoth.extractRawText({ buffer });
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('DOCX extraction timed out after 10s')), EXTRACTION_TIMEOUT_MS);
+      });
+
+      const result: any = await Promise.race([parsePromise, timeoutPromise]);
+      clearTimeout(timer!);
+      const text = (result?.value || '').trim().slice(0, MAX_RESUME_TEXT_LENGTH);
+      return text || null;
+    } catch (err: any) {
+      clearTimeout(timer!);
+      logger.warn(`DOCX text extraction failed: ${err.message || 'unknown error'}`);
+      return null;
+    }
+  }
+
+  return null;
+}
 
 @Injectable()
 export class CandidateResumeService {
@@ -103,12 +166,13 @@ export class CandidateResumeService {
       sanitizedFileName = sanitizeFileName(originalName);
       assertSafeContent(file.buffer);
       detectedMimeType = 'text/plain';
-      resumeText = file.buffer.toString('utf8').slice(0, 50000);
     } else {
       const validation = validateDocumentFile(originalName, file.buffer, file.mimetype);
       sanitizedFileName = validation.sanitizedFileName;
       detectedMimeType = validation.detectedMimeType;
     }
+
+    resumeText = await extractTextFromDocument(ext, file.buffer, this.logger);
 
     // Retrieve candidate profile
     const user = await this.prisma.user.findUnique({
@@ -170,6 +234,32 @@ export class CandidateResumeService {
         } catch (cleanupErr: any) {
           this.logger.warn(`Failed to clean up old resume ${previousStorageKey}: ${cleanupErr.message}`);
         }
+      }
+
+      // 4. Sync candidate-owned resume fields to org-scoped candidate rows linked by userId
+      try {
+        const linkedCandidates = await this.prisma.candidate.findMany({
+          where: { userId: actor.userId },
+        });
+
+        for (const cand of linkedCandidates) {
+          const isRecruiterSourced = cand.source !== 'CANDIDATE_PORTAL' && cand.source !== 'PORTAL';
+          const updateData: any = {};
+          if (newStorageKey && (!isRecruiterSourced || !cand.resumeUrl)) {
+            updateData.resumeUrl = newStorageKey;
+          }
+          if (resumeText !== null && (!isRecruiterSourced || !cand.resumeText)) {
+            updateData.resumeText = resumeText;
+          }
+          if (Object.keys(updateData).length > 0) {
+            await this.prisma.candidate.update({
+              where: { id: cand.id },
+              data: updateData,
+            });
+          }
+        }
+      } catch (syncErr: any) {
+        this.logger.warn(`Failed to sync resume to linked ATS candidates: ${syncErr.message}`);
       }
 
       this.logger.log(`Successfully uploaded resume for candidate ${actor.userId}`);
@@ -284,6 +374,24 @@ export class CandidateResumeService {
         resumeText: null,
       },
     });
+
+    // Clear candidate-owned resume fields on linked ATS candidates
+    try {
+      const linkedCandidates = await this.prisma.candidate.findMany({
+        where: { userId: actor.userId },
+      });
+      for (const cand of linkedCandidates) {
+        const isRecruiterSourced = cand.source !== 'CANDIDATE_PORTAL' && cand.source !== 'PORTAL';
+        if (!isRecruiterSourced) {
+          await this.prisma.candidate.update({
+            where: { id: cand.id },
+            data: { resumeUrl: null, resumeText: null },
+          });
+        }
+      }
+    } catch (syncErr: any) {
+      this.logger.warn(`Failed to sync resume deletion to linked ATS candidates: ${syncErr.message}`);
+    }
 
     this.logger.log(`Successfully deleted resume for candidate ${actor.userId}`);
     return { message: 'Resume deleted successfully' };

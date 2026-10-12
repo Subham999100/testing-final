@@ -27,7 +27,7 @@ async function extractPdfText(buffer: Buffer): Promise<ExtractedResult> {
   let timer: NodeJS.Timeout;
   try {
     // Dynamic import to support pluggable installation
-    const pdfParse = require('pdf-parse');
+    const pdfParse = require('pdf-parse/lib/pdf-parse.js');
     const parsePromise = pdfParse(buffer);
     const timeoutPromise = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error('Extraction timed out after 10s')), TIMEOUT_MS);

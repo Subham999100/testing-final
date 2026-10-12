@@ -14,6 +14,8 @@ import { UserRole } from '@prisma/client';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { PrismaService } from '../../../database/prisma.service';
 import { CloudStorageService } from '../../../integrations/storage/storage.service';
+import * as fs from 'fs';
+import * as path from 'path';
 import {
   CandidateResumeService,
   UploadedFileObject,
@@ -45,6 +47,10 @@ describe('CandidateResumeService', () => {
         create: jest.fn(),
         update: jest.fn(),
         findUnique: jest.fn(),
+      },
+      candidate: {
+        findMany: jest.fn().mockResolvedValue([]),
+        update: jest.fn().mockResolvedValue({}),
       },
     };
 
@@ -254,6 +260,226 @@ describe('CandidateResumeService', () => {
       expect(cloudStorage.deletePrivateObject).toHaveBeenCalledWith(
         'resumes/candidates/usr_cand_1/mock-resume-key.pdf',
       );
+    });
+
+    it('should extract text from sample PDF resume using pdf-parse', async () => {
+      const pdfFixturePath = path.resolve(
+        __dirname,
+        '../../../../node_modules/pdf-parse/test/data/01-valid.pdf',
+      );
+      const pdfBuffer = fs.readFileSync(pdfFixturePath);
+
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'usr_cand_1',
+        role: UserRole.CANDIDATE,
+        candidateProfile: {
+          id: 'prof_cand_1',
+          userId: 'usr_cand_1',
+          resumeStorageKey: null,
+        },
+      });
+
+      let capturedResumeText: string | null = null;
+      prisma.candidateProfile.update.mockImplementation(async (args: any) => {
+        capturedResumeText = args.data.resumeText;
+        return {
+          id: 'prof_cand_1',
+          resumeStorageKey: 'resumes/candidates/usr_cand_1/mock.pdf',
+          resumeFileName: 'sample.pdf',
+          resumeMimeType: 'application/pdf',
+          resumeFileSize: pdfBuffer.length,
+          resumeUploadedAt: new Date(),
+          resumeText: args.data.resumeText,
+        };
+      });
+
+      const file: UploadedFileObject = {
+        originalname: 'sample.pdf',
+        mimetype: 'application/pdf',
+        size: pdfBuffer.length,
+        buffer: pdfBuffer,
+      };
+
+      const result = await service.uploadResume(mockActor, file);
+
+      expect(result.hasText).toBe(true);
+      expect(capturedResumeText).toBeDefined();
+      expect(typeof capturedResumeText).toBe('string');
+      expect((capturedResumeText as unknown as string).length).toBeGreaterThan(100);
+      expect(capturedResumeText).toContain('Trace-based');
+    });
+
+    it('should extract text from sample DOCX resume using mammoth', async () => {
+      const docxFixturePath = path.resolve(
+        __dirname,
+        '../../../../node_modules/mammoth/test/test-data/single-paragraph.docx',
+      );
+      const docxBuffer = fs.readFileSync(docxFixturePath);
+
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'usr_cand_1',
+        role: UserRole.CANDIDATE,
+        candidateProfile: {
+          id: 'prof_cand_1',
+          userId: 'usr_cand_1',
+          resumeStorageKey: null,
+        },
+      });
+
+      let capturedResumeText: string | null = null;
+      prisma.candidateProfile.update.mockImplementation(async (args: any) => {
+        capturedResumeText = args.data.resumeText;
+        return {
+          id: 'prof_cand_1',
+          resumeStorageKey: 'resumes/candidates/usr_cand_1/mock.docx',
+          resumeFileName: 'sample.docx',
+          resumeMimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          resumeFileSize: docxBuffer.length,
+          resumeUploadedAt: new Date(),
+          resumeText: args.data.resumeText,
+        };
+      });
+
+      const file: UploadedFileObject = {
+        originalname: 'sample.docx',
+        mimetype: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        size: docxBuffer.length,
+        buffer: docxBuffer,
+      };
+
+      const result = await service.uploadResume(mockActor, file);
+
+      expect(result.hasText).toBe(true);
+      expect(capturedResumeText).toBeDefined();
+      expect(capturedResumeText).toBe('Walking on imported air');
+    });
+
+    it('should yield null text for legacy .doc binary files without failing upload', async () => {
+      const docBuffer = Buffer.concat([
+        Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+        Buffer.from(' legacy word binary content'),
+      ]);
+
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'usr_cand_1',
+        role: UserRole.CANDIDATE,
+        candidateProfile: {
+          id: 'prof_cand_1',
+          userId: 'usr_cand_1',
+          resumeStorageKey: null,
+        },
+      });
+
+      let capturedResumeText: string | null = 'not-null';
+      prisma.candidateProfile.update.mockImplementation(async (args: any) => {
+        capturedResumeText = args.data.resumeText;
+        return {
+          id: 'prof_cand_1',
+          resumeStorageKey: 'resumes/candidates/usr_cand_1/mock.doc',
+          resumeFileName: 'legacy.doc',
+          resumeMimeType: 'application/msword',
+          resumeFileSize: docBuffer.length,
+          resumeUploadedAt: new Date(),
+          resumeText: null,
+        };
+      });
+
+      const file: UploadedFileObject = {
+        originalname: 'legacy.doc',
+        mimetype: 'application/msword',
+        size: docBuffer.length,
+        buffer: docBuffer,
+      };
+
+      const result = await service.uploadResume(mockActor, file);
+
+      expect(result.hasResume).toBe(true);
+      expect(result.hasText).toBe(false);
+      expect(capturedResumeText).toBeNull();
+    });
+
+    it('should cap extracted text at 200,000 characters', async () => {
+      const hugeText = 'A'.repeat(250_000);
+      const txtBuffer = Buffer.from(hugeText);
+
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'usr_cand_1',
+        role: UserRole.CANDIDATE,
+        candidateProfile: {
+          id: 'prof_cand_1',
+          userId: 'usr_cand_1',
+          resumeStorageKey: null,
+        },
+      });
+
+      let capturedResumeText: string | null = null;
+      prisma.candidateProfile.update.mockImplementation(async (args: any) => {
+        capturedResumeText = args.data.resumeText;
+        return {
+          id: 'prof_cand_1',
+          resumeStorageKey: 'resumes/candidates/usr_cand_1/mock.txt',
+          resumeFileName: 'huge.txt',
+          resumeMimeType: 'text/plain',
+          resumeFileSize: txtBuffer.length,
+          resumeUploadedAt: new Date(),
+          resumeText: args.data.resumeText,
+        };
+      });
+
+      const file: UploadedFileObject = {
+        originalname: 'huge.txt',
+        mimetype: 'text/plain',
+        size: txtBuffer.length,
+        buffer: txtBuffer,
+      };
+
+      await service.uploadResume(mockActor, file);
+
+      expect(capturedResumeText).toBeDefined();
+      expect(capturedResumeText!.length).toBe(200_000);
+    });
+
+    it('should never fail the upload if text extraction throws or encounters error', async () => {
+      // Corrupt/invalid PDF buffer
+      const corruptedPdfBuffer = Buffer.from('%PDF-1.4 corrupt data \x00\xFF\xFE');
+
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'usr_cand_1',
+        role: UserRole.CANDIDATE,
+        candidateProfile: {
+          id: 'prof_cand_1',
+          userId: 'usr_cand_1',
+          resumeStorageKey: null,
+        },
+      });
+
+      let capturedResumeText: string | null = 'initialized';
+      prisma.candidateProfile.update.mockImplementation(async (args: any) => {
+        capturedResumeText = args.data.resumeText;
+        return {
+          id: 'prof_cand_1',
+          resumeStorageKey: 'resumes/candidates/usr_cand_1/mock.pdf',
+          resumeFileName: 'corrupted.pdf',
+          resumeMimeType: 'application/pdf',
+          resumeFileSize: corruptedPdfBuffer.length,
+          resumeUploadedAt: new Date(),
+          resumeText: null,
+        };
+      });
+
+      const file: UploadedFileObject = {
+        originalname: 'corrupted.pdf',
+        mimetype: 'application/pdf',
+        size: corruptedPdfBuffer.length,
+        buffer: corruptedPdfBuffer,
+      };
+
+      // Upload succeeds without throwing
+      const result = await service.uploadResume(mockActor, file);
+
+      expect(result.hasResume).toBe(true);
+      expect(result.hasText).toBe(false);
+      expect(capturedResumeText).toBeNull();
     });
   });
 
