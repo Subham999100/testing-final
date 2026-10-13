@@ -2,6 +2,7 @@
 // Clyptus Job Portal - Candidate Portal (Design B)
 // Section: Certifications
 // Card view + structured certification add/edit modal + delete confirmation
+// Optional credential links with lenient URL parsing
 // ============================================================
 
 import React, { useState } from 'react';
@@ -17,12 +18,28 @@ import { useProfileSectionUpdate } from '../hooks/useProfileSectionUpdate';
 import { Award, Plus, Pencil, Trash2, ExternalLink } from 'lucide-react';
 
 const certItemSchema = z.object({
-  name: z.string().min(2, 'Certification name is required'),
+  name: z.string().min(2, 'Certification name is required (at least 2 characters)'),
   issuingOrg: z.string().min(2, 'Issuing organization is required'),
   issueDate: z.string().optional(),
   expiryDate: z.string().optional(),
   credentialId: z.string().optional(),
-  credentialUrl: z.string().trim().optional().or(z.literal('')),
+  credentialUrl: z
+    .string()
+    .trim()
+    .optional()
+    .refine(
+      (val) => {
+        if (!val || val.trim().length === 0) return true; // empty -> skip validation
+        try {
+          const testUrl = /^https?:\/\//i.test(val) ? val : `https://${val}`;
+          new URL(testUrl);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: 'Please enter a valid credential URL (e.g. credly.com/... or https://...)' },
+    ),
 });
 
 type CertFormValues = z.infer<typeof certItemSchema>;
@@ -37,8 +54,8 @@ export const CertificationsSection: React.FC<CertificationsSectionProps> = ({ pr
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
 
-  // Normalize and strictly filter out invalid/empty array objects from malformed resume data
-  const rawCerts = Array.isArray(profile.certifications) ? profile.certifications : [];
+  // Normalize and strictly filter out invalid/empty items from resume data or empty defaults
+  const rawCerts = Array.isArray(profile?.certifications) ? profile.certifications : [];
   const certs: CandidateCertificationItem[] = rawCerts
     .filter((item): item is CandidateCertificationItem =>
       Boolean(
@@ -107,39 +124,48 @@ export const CertificationsSection: React.FC<CertificationsSectionProps> = ({ pr
   };
 
   const onSubmit = async (values: CertFormValues) => {
-    console.log('[CertificationsSection] Submitting certification form:', values);
-    let cleanUrl = values.credentialUrl?.trim() || undefined;
-    if (cleanUrl && !/^https?:\/\//i.test(cleanUrl)) {
-      cleanUrl = `https://${cleanUrl}`;
+    console.log('[CertificationsSection] Save clicked with form values:', values);
+    try {
+      let cleanUrl = values.credentialUrl?.trim() || undefined;
+      if (cleanUrl && !/^https?:\/\//i.test(cleanUrl)) {
+        cleanUrl = `https://${cleanUrl}`;
+      }
+
+      const newItem: CandidateCertificationItem = {
+        name: values.name.trim(),
+        issuingOrg: values.issuingOrg.trim(),
+        issueDate: values.issueDate?.trim() || undefined,
+        expiryDate: values.expiryDate?.trim() || undefined,
+        credentialId: values.credentialId?.trim() || undefined,
+        credentialUrl: cleanUrl,
+      };
+
+      const nextList = [...certs];
+      if (editingIndex !== null) {
+        nextList[editingIndex] = newItem;
+      } else {
+        nextList.push(newItem);
+      }
+
+      console.log('[CertificationsSection] Sending payload to API:', { certifications: nextList });
+      await updateMutation.mutateAsync({ certifications: nextList });
+      console.log('[CertificationsSection] Save succeeded, updated certs list applied!');
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error('[CertificationsSection] Error during certification save:', err);
     }
-
-    const newItem: CandidateCertificationItem = {
-      name: values.name.trim(),
-      issuingOrg: values.issuingOrg.trim(),
-      issueDate: values.issueDate?.trim() || undefined,
-      expiryDate: values.expiryDate?.trim() || undefined,
-      credentialId: values.credentialId?.trim() || undefined,
-      credentialUrl: cleanUrl,
-    };
-
-    const nextList = [...certs];
-    if (editingIndex !== null) {
-      nextList[editingIndex] = newItem;
-    } else {
-      nextList.push(newItem);
-    }
-
-    console.log('[CertificationsSection] Applying certifications update to backend:', nextList);
-    await updateMutation.mutateAsync({ certifications: nextList });
-    setIsModalOpen(false);
   };
-
 
   const handleDeleteConfirm = async () => {
     if (deleteIndex === null) return;
-    const nextList = certs.filter((_, i) => i !== deleteIndex);
-    await updateMutation.mutateAsync({ certifications: nextList });
-    setDeleteIndex(null);
+    try {
+      const nextList = certs.filter((_, i) => i !== deleteIndex);
+      console.log('[CertificationsSection] Deleting certification item, sending:', { certifications: nextList });
+      await updateMutation.mutateAsync({ certifications: nextList });
+      setDeleteIndex(null);
+    } catch (err) {
+      console.error('[CertificationsSection] Error during certification delete:', err);
+    }
   };
 
   return (
@@ -180,17 +206,20 @@ export const CertificationsSection: React.FC<CertificationsSectionProps> = ({ pr
                         className="inline-flex items-center gap-1 text-xs text-[#C2410C] hover:underline"
                       >
                         <ExternalLink className="w-3 h-3" />
-                        <span>Verify</span>
+                        <span>View credential</span>
                       </a>
                     )}
                   </div>
                   <p className="text-xs text-[#5C564E] font-medium mt-0.5">
-                    {cert.issuingOrg || cert.issuer}
+                    {cert.issuingOrg || cert.issuer || 'Issuing Organization'}
+                    {cert.issueDate && ` • Issued ${cert.issueDate}`}
+                    {cert.expiryDate && ` • Expires ${cert.expiryDate}`}
                   </p>
-                  <div className="flex items-center gap-3 text-[11px] text-[#5C564E] mt-1 flex-wrap">
-                    {cert.issueDate && <span>Issued: {cert.issueDate}</span>}
-                    {cert.credentialId && <span>ID: {cert.credentialId}</span>}
-                  </div>
+                  {cert.credentialId && (
+                    <p className="text-xs text-[#5C564E] mt-1 font-mono">
+                      ID: {cert.credentialId}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity shrink-0">
@@ -218,22 +247,24 @@ export const CertificationsSection: React.FC<CertificationsSectionProps> = ({ pr
           <EmptyState
             icon={<Award className="w-8 h-8 text-[#5C564E]" />}
             title="No certifications added"
-            description="Add professional licenses, cloud credentials (AWS, GCP, Azure), or domain certificates."
+            description="Add professional licenses, cloud credentials, or specializations you've earned."
             actionLabel="+ Add certification"
             onAction={handleOpenAdd}
           />
         )}
       </SectionCard>
 
-      {/* Certification Modal */}
+      {/* Certifications Modal */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={editingIndex !== null ? 'Edit Certification' : 'Add Certification'}
-        subtitle="Add your issuing organization, issue date, and credential validation link."
+        subtitle="Verify your credentials and licenses with issuing authority details."
         isDirty={isDirty}
         isSubmitting={isSubmitting || updateMutation.isPending}
-        onSubmit={handleSubmit(onSubmit)}
+        onSubmit={handleSubmit(onSubmit, (valErrors) =>
+          console.error('[CertificationsSection] Form validation rejected:', valErrors),
+        )}
         maxWidth="lg"
       >
         <div className="space-y-4">
@@ -256,35 +287,48 @@ export const CertificationsSection: React.FC<CertificationsSectionProps> = ({ pr
             )}
           </div>
 
+          <div>
+            <label htmlFor="cert-org" className="block text-xs font-semibold text-[#1B1A17] mb-1">
+              Issuing Organization <span className="text-[#DC2626]">*</span>
+            </label>
+            <input
+              id="cert-org"
+              type="text"
+              {...register('issuingOrg')}
+              aria-invalid={Boolean(errors.issuingOrg)}
+              placeholder="e.g. Amazon Web Services, Google Cloud, Coursera"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-[#E8DFD4] bg-white text-sm text-[#1B1A17] placeholder-[#5C564E]/60 focus:outline-none focus:ring-2 focus:ring-[#C2410C]/20"
+            />
+            {errors.issuingOrg && (
+              <p className="text-xs text-[#DC2626] mt-1" role="alert">
+                {errors.issuingOrg.message}
+              </p>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label htmlFor="cert-org" className="block text-xs font-semibold text-[#1B1A17] mb-1">
-                Issuing Organization <span className="text-[#DC2626]">*</span>
+              <label htmlFor="cert-issue" className="block text-xs font-semibold text-[#1B1A17] mb-1">
+                Issue Date
               </label>
               <input
-                id="cert-org"
+                id="cert-issue"
                 type="text"
-                {...register('issuingOrg')}
-                aria-invalid={Boolean(errors.issuingOrg)}
-                placeholder="e.g. Amazon Web Services"
+                {...register('issueDate')}
+                placeholder="e.g. Jun 2024"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-[#E8DFD4] bg-white text-sm text-[#1B1A17] placeholder-[#5C564E]/60 focus:outline-none focus:ring-2 focus:ring-[#C2410C]/20"
               />
-              {errors.issuingOrg && (
-                <p className="text-xs text-[#DC2626] mt-1" role="alert">
-                  {errors.issuingOrg.message}
-                </p>
-              )}
             </div>
 
             <div>
-              <label htmlFor="cert-date" className="block text-xs font-semibold text-[#1B1A17] mb-1">
-                Issue Date (Month Year)
+              <label htmlFor="cert-expiry" className="block text-xs font-semibold text-[#1B1A17] mb-1">
+                Expiry Date (Optional)
               </label>
               <input
-                id="cert-date"
+                id="cert-expiry"
                 type="text"
-                {...register('issueDate')}
-                placeholder="e.g. June 2024"
+                {...register('expiryDate')}
+                placeholder="e.g. Jun 2027 or No Expiration"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-[#E8DFD4] bg-white text-sm text-[#1B1A17] placeholder-[#5C564E]/60 focus:outline-none focus:ring-2 focus:ring-[#C2410C]/20"
               />
             </div>
@@ -340,4 +384,5 @@ export const CertificationsSection: React.FC<CertificationsSectionProps> = ({ pr
     </>
   );
 };
+
 export default CertificationsSection;

@@ -2,6 +2,7 @@
 // Clyptus Job Portal - Candidate Portal (Design B)
 // Section: Projects
 // Card view + structured project add/edit modal + delete confirmation
+// Optional project links with lenient URL parsing
 // ============================================================
 
 import React, { useState } from 'react';
@@ -18,10 +19,26 @@ import { useProfileSectionUpdate } from '../hooks/useProfileSectionUpdate';
 import { FolderGit2, Plus, Pencil, Trash2, ExternalLink } from 'lucide-react';
 
 const projectItemSchema = z.object({
-  title: z.string().min(2, 'Project title is required'),
+  title: z.string().min(2, 'Project title is required (at least 2 characters)'),
   role: z.string().optional(),
   technologies: z.string().optional(),
-  url: z.string().trim().optional().or(z.literal('')),
+  url: z
+    .string()
+    .trim()
+    .optional()
+    .refine(
+      (val) => {
+        if (!val || val.trim().length === 0) return true; // empty -> skip validation
+        try {
+          const testUrl = /^https?:\/\//i.test(val) ? val : `https://${val}`;
+          new URL(testUrl);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: 'Please enter a valid web link (e.g. github.com/user/project or https://...)' },
+    ),
   description: z.string().max(2000, 'Description must not exceed 2000 characters').optional(),
 });
 
@@ -37,8 +54,8 @@ export const ProjectsSection: React.FC<ProjectsSectionProps> = ({ profile }) => 
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
 
-  // Normalize and strictly filter out invalid/empty array objects from malformed resume data
-  const rawProjects = Array.isArray(profile.projects) ? profile.projects : [];
+  // Normalize and strictly filter out invalid/empty items from resume data or empty defaults
+  const rawProjects = Array.isArray(profile?.projects) ? profile.projects : [];
   const projects: CandidateProjectItem[] = rawProjects
     .filter((item): item is CandidateProjectItem =>
       Boolean(
@@ -107,45 +124,54 @@ export const ProjectsSection: React.FC<ProjectsSectionProps> = ({ profile }) => 
   };
 
   const onSubmit = async (values: ProjectFormValues) => {
-    console.log('[ProjectsSection] Submitting project form:', values);
-    const techArray = values.technologies
-      ? values.technologies
-          .split(',')
-          .map((t) => t.trim())
-          .filter(Boolean)
-      : [];
+    console.log('[ProjectsSection] Save clicked with form values:', values);
+    try {
+      const techArray = values.technologies
+        ? values.technologies
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : [];
 
-    let cleanUrl = values.url?.trim() || undefined;
-    if (cleanUrl && !/^https?:\/\//i.test(cleanUrl)) {
-      cleanUrl = `https://${cleanUrl}`;
+      let cleanUrl = values.url?.trim() || undefined;
+      if (cleanUrl && !/^https?:\/\//i.test(cleanUrl)) {
+        cleanUrl = `https://${cleanUrl}`;
+      }
+
+      const newItem: CandidateProjectItem = {
+        title: values.title.trim(),
+        role: values.role?.trim() || undefined,
+        technologies: techArray.length > 0 ? techArray : undefined,
+        url: cleanUrl,
+        description: values.description?.trim() || undefined,
+      };
+
+      const nextList = [...projects];
+      if (editingIndex !== null) {
+        nextList[editingIndex] = newItem;
+      } else {
+        nextList.push(newItem);
+      }
+
+      console.log('[ProjectsSection] Sending payload to API:', { projects: nextList });
+      await updateMutation.mutateAsync({ projects: nextList });
+      console.log('[ProjectsSection] Save succeeded, updated projects list applied!');
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error('[ProjectsSection] Error during project save:', err);
     }
-
-    const newItem: CandidateProjectItem = {
-      title: values.title.trim(),
-      role: values.role?.trim() || undefined,
-      technologies: techArray.length > 0 ? techArray : undefined,
-      url: cleanUrl,
-      description: values.description?.trim() || undefined,
-    };
-
-    const nextList = [...projects];
-    if (editingIndex !== null) {
-      nextList[editingIndex] = newItem;
-    } else {
-      nextList.push(newItem);
-    }
-
-    console.log('[ProjectsSection] Applying project updates to backend:', nextList);
-    await updateMutation.mutateAsync({ projects: nextList });
-    setIsModalOpen(false);
   };
-
 
   const handleDeleteConfirm = async () => {
     if (deleteIndex === null) return;
-    const nextList = projects.filter((_, i) => i !== deleteIndex);
-    await updateMutation.mutateAsync({ projects: nextList });
-    setDeleteIndex(null);
+    try {
+      const nextList = projects.filter((_, i) => i !== deleteIndex);
+      console.log('[ProjectsSection] Deleting project item, sending:', { projects: nextList });
+      await updateMutation.mutateAsync({ projects: nextList });
+      setDeleteIndex(null);
+    } catch (err) {
+      console.error('[ProjectsSection] Error during project delete:', err);
+    }
   };
 
   return (
@@ -186,7 +212,7 @@ export const ProjectsSection: React.FC<ProjectsSectionProps> = ({ profile }) => 
                         className="inline-flex items-center gap-1 text-xs text-[#C2410C] hover:underline"
                       >
                         <ExternalLink className="w-3 h-3" />
-                        <span>Link</span>
+                        <span>View project</span>
                       </a>
                     )}
                   </div>
@@ -247,7 +273,9 @@ export const ProjectsSection: React.FC<ProjectsSectionProps> = ({ profile }) => 
         subtitle="Highlight project architecture, tech stack, and your direct contributions."
         isDirty={isDirty}
         isSubmitting={isSubmitting || updateMutation.isPending}
-        onSubmit={handleSubmit(onSubmit)}
+        onSubmit={handleSubmit(onSubmit, (valErrors) =>
+          console.error('[ProjectsSection] Form validation rejected:', valErrors),
+        )}
         maxWidth="lg"
       >
         <div className="space-y-4">
@@ -301,7 +329,6 @@ export const ProjectsSection: React.FC<ProjectsSectionProps> = ({ profile }) => 
                 </p>
               )}
             </div>
-
           </div>
 
           <div>
@@ -347,4 +374,5 @@ export const ProjectsSection: React.FC<ProjectsSectionProps> = ({ profile }) => 
     </>
   );
 };
+
 export default ProjectsSection;

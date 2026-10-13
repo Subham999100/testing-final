@@ -20,7 +20,7 @@ import { Languages as LanguagesIcon, Plus, Pencil, Trash2 } from 'lucide-react';
 const PROFICIENCY_LEVELS = ['Basic', 'Conversational', 'Fluent', 'Native'] as const;
 
 const languageItemSchema = z.object({
-  name: z.string().min(2, 'Language name is required'),
+  name: z.string().min(2, 'Language name is required (at least 2 characters)'),
   proficiency: z.enum(PROFICIENCY_LEVELS, {
     errorMap: () => ({ message: 'Please select a valid proficiency level' }),
   }),
@@ -39,7 +39,7 @@ export const LanguagesSection: React.FC<LanguagesSectionProps> = ({ profile }) =
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
 
   // Normalize languages into structured objects { name, proficiency }, filtering invalid items
-  const rawLanguages = Array.isArray(profile.languages) ? profile.languages : [];
+  const rawLanguages = Array.isArray(profile?.languages) ? profile.languages : [];
   const normalizedLanguages: CandidateLanguageItem[] = rawLanguages
     .map((item) => {
       if (typeof item === 'string' && item.trim()) {
@@ -98,32 +98,40 @@ export const LanguagesSection: React.FC<LanguagesSectionProps> = ({ profile }) =
   };
 
   const onSubmit = async (values: LanguageFormValues) => {
-    console.log('[LanguagesSection] Submitting language form:', values);
-    const newItem: CandidateLanguageItem = {
-      name: values.name.trim(),
-      proficiency: values.proficiency,
-    };
+    console.log('[LanguagesSection] Save clicked with form values:', values);
+    try {
+      const newItem: CandidateLanguageItem = {
+        name: values.name.trim(),
+        proficiency: values.proficiency,
+      };
 
-    const nextList = [...normalizedLanguages];
-    if (editingIndex !== null) {
-      nextList[editingIndex] = newItem;
-    } else {
-      nextList.push(newItem);
+      const nextList = [...normalizedLanguages];
+      if (editingIndex !== null) {
+        nextList[editingIndex] = newItem;
+      } else {
+        nextList.push(newItem);
+      }
+
+      console.log('[LanguagesSection] Sending payload to API:', { languages: nextList });
+      await updateMutation.mutateAsync({ languages: nextList });
+      console.log('[LanguagesSection] Save succeeded, updated languages list applied!');
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error('[LanguagesSection] Error during language save:', err);
     }
-
-    console.log('[LanguagesSection] Applying language updates to backend:', nextList);
-    await updateMutation.mutateAsync({ languages: nextList });
-    setIsModalOpen(false);
   };
 
   const handleDeleteConfirm = async () => {
     if (deleteIndex === null) return;
-    const nextList = normalizedLanguages.filter((_, i) => i !== deleteIndex);
-    console.log('[LanguagesSection] Deleting language, updated list:', nextList);
-    await updateMutation.mutateAsync({ languages: nextList });
-    setDeleteIndex(null);
+    try {
+      const nextList = normalizedLanguages.filter((_, i) => i !== deleteIndex);
+      console.log('[LanguagesSection] Deleting language item, sending:', { languages: nextList });
+      await updateMutation.mutateAsync({ languages: nextList });
+      setDeleteIndex(null);
+    } catch (err) {
+      console.error('[LanguagesSection] Error during language delete:', err);
+    }
   };
-
 
   return (
     <>
@@ -195,7 +203,9 @@ export const LanguagesSection: React.FC<LanguagesSectionProps> = ({ profile }) =
         subtitle="Specify language and your working proficiency level."
         isDirty={isDirty}
         isSubmitting={isSubmitting || updateMutation.isPending}
-        onSubmit={handleSubmit(onSubmit)}
+        onSubmit={handleSubmit(onSubmit, (valErrors) =>
+          console.error('[LanguagesSection] Form validation rejected:', valErrors),
+        )}
         maxWidth="md"
       >
         <div className="space-y-4">
@@ -252,4 +262,5 @@ export const LanguagesSection: React.FC<LanguagesSectionProps> = ({ profile }) =
     </>
   );
 };
+
 export default LanguagesSection;
