@@ -41,6 +41,35 @@ export interface CandidateExperienceItem {
   description?: string;
 }
 
+export interface CandidateProjectItem {
+  id?: string;
+  title: string;
+  role?: string;
+  startDate?: string;
+  endDate?: string;
+  current?: boolean;
+  url?: string;
+  description?: string;
+  technologies?: string[];
+}
+
+export interface CandidateCertificationItem {
+  id?: string;
+  name: string;
+  issuingOrg: string;
+  issuer?: string;
+  issueDate?: string;
+  expiryDate?: string;
+  credentialId?: string;
+  credentialUrl?: string;
+  url?: string;
+}
+
+export interface CandidateLanguageItem {
+  name: string;
+  proficiency: string; // 'Basic' | 'Conversational' | 'Fluent' | 'Native'
+}
+
 export interface CandidateProfile {
   id: string;
   phone: string | null;
@@ -49,13 +78,47 @@ export interface CandidateProfile {
   location: string | null;
   experienceYears: number | null;
   currentCompany: string | null;
+  coverUrl?: string | null;
+  openToWork?: boolean | null;
+  fromResumeSections?: string[];
   skills: string[];
   education?: CandidateEducationItem[] | null;
   experience?: CandidateExperienceItem[] | null;
+  projects?: CandidateProjectItem[] | null;
+  certifications?: CandidateCertificationItem[] | null;
+  languages?: Array<{ name: string; proficiency: string }> | string[] | null;
   resumeFileName?: string | null;
   resumeUploadedAt?: string | null;
   visibleToRecruiters?: boolean;
   blockedOrganisations?: string[];
+}
+
+export type OnboardingStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETE';
+export type VideoInterviewStatus = 'NOT_STARTED' | 'SKIPPED' | 'IN_PROGRESS' | 'COMPLETED';
+
+export interface CompletionSectionScore {
+  weight: number;
+  earned: number;
+  completed: boolean;
+  hint: string;
+}
+
+export interface OnboardingStatusResponse {
+  onboardingStatus: OnboardingStatus;
+  onboardingStep: number;
+  videoInterviewStatus: VideoInterviewStatus;
+  completionScore: number;
+  completionBreakdown: Record<string, CompletionSectionScore>;
+  isComplete: boolean;
+  user: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string | null;
+    fullName?: string;
+    isEmailVerified: boolean;
+  };
+  profile: any;
 }
 
 export interface CandidateFullProfile {
@@ -63,20 +126,45 @@ export interface CandidateFullProfile {
   userId: string;
   email: string;
   firstName: string;
-  lastName: string;
+  lastName: string | null;
   fullName: string;
   role: UserRole;
   isEmailVerified: boolean;
   phone: string | null;
+  phoneCountryCode?: string | null;
+  dateOfBirth?: string | null;
+  gender?: string | null;
+  isFresher?: boolean;
+  photoUrl?: string | null;
+  coverUrl?: string | null;
+  openToWork?: boolean | null;
+  fromResumeSections?: string[];
   headline: string | null;
   location: string | null;
   experienceYears: number | null;
+  experienceMonths?: number;
+  currentJobTitle?: string | null;
   currentCompany: string | null;
+  currentSalary?: number | null;
+  expectedSalary?: number | null;
+  noticePeriod?: string | null;
+  preferredLocations?: string[];
+  preferredJobTypes?: string[];
+  preferredWorkModes?: string[];
   skills: string[];
   bio: string | null;
   education: CandidateEducationItem[];
   experience: CandidateExperienceItem[];
+  projects?: CandidateProjectItem[];
+  certifications?: CandidateCertificationItem[];
+  languages?: Array<{ name: string; proficiency: string }> | string[];
+  socialLinks?: Record<string, string>;
   resume: CandidateResumeMetadata;
+  onboardingStatus?: OnboardingStatus;
+  onboardingStep?: number;
+  videoInterviewStatus?: VideoInterviewStatus;
+  completionScore?: number;
+  completionBreakdown?: Record<string, CompletionSectionScore>;
   visibleToRecruiters?: boolean;
   blockedOrganisations?: string[];
   createdAt: string;
@@ -87,7 +175,8 @@ export interface CandidateUser {
   id: string;
   email: string;
   firstName: string;
-  lastName: string;
+  lastName: string | null;
+  fullName?: string;
   role: UserRole;
   isEmailVerified: boolean;
   createdAt?: string;
@@ -97,7 +186,8 @@ export interface CandidateMeResult {
   id: string;
   email: string;
   firstName: string;
-  lastName: string;
+  lastName: string | null;
+  fullName?: string;
   role: UserRole;
   isEmailVerified: boolean;
   createdAt: string;
@@ -206,14 +296,33 @@ export interface UpdateCandidateProfileRequest {
   lastName?: string;
   fullName?: string;
   phone?: string;
+  phoneCountryCode?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  isFresher?: boolean;
+  photoUrl?: string;
+  coverUrl?: string;
+  openToWork?: boolean;
   headline?: string;
   location?: string;
   experienceYears?: number;
+  experienceMonths?: number;
+  currentJobTitle?: string;
   currentCompany?: string;
+  currentSalary?: number;
+  expectedSalary?: number;
+  noticePeriod?: string;
+  preferredLocations?: string[];
+  preferredJobTypes?: string[];
+  preferredWorkModes?: string[];
   skills?: string[];
   bio?: string;
   education?: CandidateEducationItem[];
   experience?: CandidateExperienceItem[];
+  projects?: CandidateProjectItem[];
+  certifications?: CandidateCertificationItem[];
+  languages?: Array<{ name: string; proficiency: string }> | string[];
+  socialLinks?: Record<string, string>;
   visibleToRecruiters?: boolean;
   blockedOrganisations?: string[];
 }

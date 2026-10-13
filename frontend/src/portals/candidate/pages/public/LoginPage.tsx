@@ -9,7 +9,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCandidateAuth } from '../../lib/session';
 import { candidateApi } from '../../lib/api';
 import { candidateQueryKeys } from '../../lib/queryKeys';
-import { CandidateResumeMetadata } from '../../lib/types';
+import { OnboardingStatusResponse } from '../../lib/types';
+import { sanitizeNextUrl } from '../../lib/url';
 import { Button, Input, Field } from '@/portals/org/ui/ui';
 import { Lock, Mail, AlertCircle } from 'lucide-react';
 
@@ -18,7 +19,7 @@ export const LoginPage: React.FC = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
-  const nextUrl = new URLSearchParams(location.search).get('next') || (location.state as any)?.from || '/candidate/dashboard';
+  const rawNext = new URLSearchParams(location.search).get('next') || (location.state as any)?.from;
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,14 +33,20 @@ export const LoginPage: React.FC = () => {
 
     try {
       await login({ email, password });
-      const resumeMeta = await queryClient.fetchQuery({
-        queryKey: candidateQueryKeys.resume,
-        queryFn: () => candidateApi.get<CandidateResumeMetadata>('/candidate/profile/resume'),
+      
+      // Check onboarding completion on server (authoritative source of truth)
+      const onboardingStatus = await queryClient.fetchQuery({
+        queryKey: candidateQueryKeys.onboarding,
+        queryFn: () => candidateApi.get<OnboardingStatusResponse>('/candidate/onboarding/status'),
       });
-      if (!resumeMeta?.hasResume) {
-        navigate(`/candidate/resume?next=${encodeURIComponent(nextUrl)}&onboarding=true`, { replace: true });
+
+      if (!onboardingStatus || onboardingStatus.onboardingStatus !== 'COMPLETE') {
+        // If incomplete, resume at onboarding wizard
+        navigate('/onboarding', { replace: true });
       } else {
-        navigate(nextUrl, { replace: true });
+        // If complete, redirect to /candidate/profile (or validated ?next= preventing open redirects)
+        const target = sanitizeNextUrl(rawNext, '/candidate/profile');
+        navigate(target, { replace: true });
       }
     } catch (err: any) {
       setError(err?.message || 'Invalid candidate email or password');
@@ -104,7 +111,7 @@ export const LoginPage: React.FC = () => {
         <div className="text-center pt-4 border-t border-slate-100 text-sm text-slate-600">
           Don't have a candidate account?{' '}
           <Link
-            to={nextUrl && nextUrl !== '/candidate/dashboard' ? `/register?next=${encodeURIComponent(nextUrl)}` : '/register'}
+            to={rawNext ? `/register?next=${encodeURIComponent(rawNext)}` : '/register'}
             className="font-semibold text-orange-600 hover:text-orange-700"
           >
             Create account

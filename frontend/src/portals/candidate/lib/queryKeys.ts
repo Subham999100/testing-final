@@ -9,6 +9,8 @@ export const candidateQueryKeys = {
   me: ['candidate', 'me'] as const,
   profile: ['candidate', 'profile'] as const,
   resume: ['candidate', 'resume'] as const,
+  onboarding: ['candidate', 'onboarding'] as const,
+  parseStatus: ['candidate', 'resume', 'parseStatus'] as const,
 
   jobs: {
     all: ['candidate', 'jobs'] as const,

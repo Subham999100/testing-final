@@ -28,37 +28,33 @@
   --cand-warning-soft: #FFFBEB;
   --cand-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --cand-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.07);
-  --cand-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.08);
-
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  color: var(--cand-text);
-  background-color: var(--cand-bg);
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
+  /* Design B Tokens */
+  --cand-ground: #FAF6F1;
+  --cand-ink: #1B1A17;
+  --cand-accent: #C2410C;
+  --cand-accent-hover: #9A3412;
+  --cand-tint: #FFF1E6;
+  --cand-border: #E8DFD4;
+  --cand-muted: #5C564E;
+  --cand-font-serif: 'Fraunces', Georgia, serif;
+  --cand-font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .candidate-portal * {
   box-sizing: border-box;
 }
 
-/* Force Inter for all headings and body elements inside candidate portal */
-.candidate-portal h1,
-.candidate-portal h2,
-.candidate-portal h3,
-.candidate-portal h4,
-.candidate-portal h5,
-.candidate-portal h6,
-.candidate-portal p,
-.candidate-portal span,
-.candidate-portal label,
-.candidate-portal a,
-.candidate-portal button,
-.candidate-portal input,
-.candidate-portal select,
-.candidate-portal textarea {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+/* Serif font utility for headings */
+.candidate-portal .font-serif,
+.candidate-font-serif {
+  font-family: var(--cand-font-serif);
 }
+
+.candidate-portal .font-sans,
+.candidate-font-sans {
+  font-family: var(--cand-font-sans);
+}
+
 
 /* Custom interactive utility classes */
 .candidate-btn-cta {

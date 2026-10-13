@@ -9,11 +9,14 @@ import './candidate.css';
 import { PublicLayout } from './layout/PublicLayout';
 import { CandidateShell } from './layout/CandidateShell';
 import { ProtectedCandidateRoute } from './components/ProtectedCandidateRoute';
-import { HomePage } from './pages/public/HomePage';
+import { HomePage as LegacyLanding } from './pages/public/HomePage';
+// To restore legacy landing page, replace <LandingPage /> below with <LegacyLanding />
+import { LandingPage } from '@/features/landing';
 import { JobsPage } from './pages/public/JobsPage';
 import { JobDetailPage } from './pages/public/JobDetailPage';
 import { LoginPage } from './pages/public/LoginPage';
 import { RegisterPage } from './pages/public/RegisterPage';
+import { OnboardingPage } from './pages/onboarding/OnboardingPage';
 import { DashboardPage } from './pages/workspace/DashboardPage';
 import { ApplicationsPage } from './pages/workspace/ApplicationsPage';
 import { ApplicationDetailPage } from './pages/workspace/ApplicationDetailPage';
@@ -25,14 +28,19 @@ export default function CandidatePortal() {
   return (
     <Suspense fallback={<PageSkeleton />}>
       <Routes>
+        {/* Public Landing Page */}
+        <Route index element={<LandingPage />} />
+
         {/* Public Discovery & Auth Pages */}
         <Route element={<PublicLayout />}>
-          <Route index element={<HomePage />} />
           <Route path="jobs" element={<JobsPage />} />
           <Route path="jobs/:id" element={<JobDetailPage />} />
           <Route path="login" element={<LoginPage />} />
           <Route path="register" element={<RegisterPage />} />
         </Route>
+
+        {/* Candidate 5-Step Onboarding */}
+        <Route path="onboarding" element={<OnboardingPage />} />
 
         {/* Authenticated Candidate Workspace */}
         <Route

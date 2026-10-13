@@ -164,4 +164,29 @@ export const candidateApi = {
     link.remove();
     window.URL.revokeObjectURL(downloadUrl);
   },
+
+  async uploadPhoto(file: Blob | File): Promise<{ photoUrl: string }> {
+    const formData = new FormData();
+    formData.append('photo', file, 'photo.webp');
+    return candidateApi.upload<{ photoUrl: string }>('/candidate/profile/photo', formData);
+  },
+
+  async deletePhoto(): Promise<{ success: boolean; photoUrl: null }> {
+    return candidateApi.delete<{ success: boolean; photoUrl: null }>('/candidate/profile/photo');
+  },
+
+  async uploadCover(file: Blob | File): Promise<{ coverUrl: string }> {
+    const formData = new FormData();
+    formData.append('cover', file, 'cover.webp');
+    return candidateApi.upload<{ coverUrl: string }>('/candidate/profile/cover', formData);
+  },
+
+  async deleteCover(): Promise<{ success: boolean; coverUrl: null }> {
+    return candidateApi.delete<{ success: boolean; coverUrl: null }>('/candidate/profile/cover');
+  },
+
+  async updateProfile<T = any>(data: any): Promise<T> {
+    return candidateApi.patch<T>('/candidate/profile', data);
+  },
 };
+
