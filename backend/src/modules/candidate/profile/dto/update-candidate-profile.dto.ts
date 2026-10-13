@@ -124,6 +124,137 @@ export class CandidateExperienceItemDto {
   description?: string;
 }
 
+export class CandidateProjectItemDto {
+  @Transform(trimString)
+  @IsString({ message: 'Project id must be a string' })
+  @IsOptional()
+  @MaxLength(100, { message: 'Project id cannot exceed 100 characters' })
+  id?: string;
+
+  @Transform(trimString)
+  @IsString({ message: 'Project title must be a string' })
+  @IsOptional()
+  @MaxLength(200, { message: 'Project title cannot exceed 200 characters' })
+  title?: string;
+
+  @Transform(trimString)
+  @IsString({ message: 'Role must be a string' })
+  @IsOptional()
+  @MaxLength(150, { message: 'Role cannot exceed 150 characters' })
+  role?: string;
+
+  @IsArray({ message: 'Technologies must be an array of strings' })
+  @IsString({ each: true, message: 'Each technology must be a string' })
+  @IsOptional()
+  technologies?: string[];
+
+  @Transform(trimString)
+  @IsString({ message: 'Project URL must be a string' })
+  @IsOptional()
+  @MaxLength(500, { message: 'Project URL cannot exceed 500 characters' })
+  url?: string;
+
+  @Transform(trimString)
+  @IsString({ message: 'Project link alias must be a string' })
+  @IsOptional()
+  @MaxLength(500, { message: 'Project link alias cannot exceed 500 characters' })
+  link?: string;
+
+  @Transform(trimString)
+  @IsString({ message: 'Project description must be a string' })
+  @IsOptional()
+  @MaxLength(3000, { message: 'Project description cannot exceed 3000 characters' })
+  description?: string;
+}
+
+export class CandidateCertificationItemDto {
+  @Transform(trimString)
+  @IsString({ message: 'Certification id must be a string' })
+  @IsOptional()
+  @MaxLength(100, { message: 'Certification id cannot exceed 100 characters' })
+  id?: string;
+
+  @Transform(trimString)
+  @IsString({ message: 'Certification name must be a string' })
+  @IsOptional()
+  @MaxLength(200, { message: 'Certification name cannot exceed 200 characters' })
+  name?: string;
+
+  @Transform(trimString)
+  @IsString({ message: 'Certification title alias must be a string' })
+  @IsOptional()
+  @MaxLength(200, { message: 'Certification title alias cannot exceed 200 characters' })
+  title?: string;
+
+  @Transform(trimString)
+  @IsString({ message: 'Issuing organisation must be a string' })
+  @IsOptional()
+  @MaxLength(200, { message: 'Issuing organisation cannot exceed 200 characters' })
+  issuingOrg?: string;
+
+  @Transform(trimString)
+  @IsString({ message: 'Issuer alias must be a string' })
+  @IsOptional()
+  @MaxLength(200, { message: 'Issuer alias cannot exceed 200 characters' })
+  issuer?: string;
+
+  @Transform(trimString)
+  @IsString({ message: 'Issue date must be a string' })
+  @IsOptional()
+  @MaxLength(50, { message: 'Issue date cannot exceed 50 characters' })
+  issueDate?: string;
+
+  @Transform(trimString)
+  @IsString({ message: 'Year alias must be a string' })
+  @IsOptional()
+  @MaxLength(50, { message: 'Year alias cannot exceed 50 characters' })
+  year?: string;
+
+  @Transform(trimString)
+  @IsString({ message: 'Expiry date must be a string' })
+  @IsOptional()
+  @MaxLength(50, { message: 'Expiry date cannot exceed 50 characters' })
+  expiryDate?: string;
+
+  @Transform(trimString)
+  @IsString({ message: 'Credential ID must be a string' })
+  @IsOptional()
+  @MaxLength(150, { message: 'Credential ID cannot exceed 150 characters' })
+  credentialId?: string;
+
+  @Transform(trimString)
+  @IsString({ message: 'Credential URL must be a string' })
+  @IsOptional()
+  @MaxLength(500, { message: 'Credential URL cannot exceed 500 characters' })
+  credentialUrl?: string;
+
+  @Transform(trimString)
+  @IsString({ message: 'Credential URL alias must be a string' })
+  @IsOptional()
+  @MaxLength(500, { message: 'Credential URL alias cannot exceed 500 characters' })
+  url?: string;
+}
+
+export class CandidateLanguageItemDto {
+  @Transform(trimString)
+  @IsString({ message: 'Language name must be a string' })
+  @IsOptional()
+  @MaxLength(100, { message: 'Language name cannot exceed 100 characters' })
+  name?: string;
+
+  @Transform(trimString)
+  @IsString({ message: 'Language alias must be a string' })
+  @IsOptional()
+  @MaxLength(100, { message: 'Language alias cannot exceed 100 characters' })
+  language?: string;
+
+  @Transform(trimString)
+  @IsString({ message: 'Proficiency must be a string' })
+  @IsOptional()
+  @MaxLength(50, { message: 'Proficiency cannot exceed 50 characters' })
+  proficiency?: string;
+}
+
 export class UpdateCandidateProfileDto {
   @Transform(trimString)
   @IsString({ message: 'First name must be a string' })
@@ -241,17 +372,38 @@ export class UpdateCandidateProfileDto {
   @IsArray()
   preferredWorkModes?: string[];
 
+  @IsArray({ message: 'Projects must be an array' })
+  @ArrayMaxSize(50, { message: 'Projects cannot exceed 50 entries' })
+  @ValidateNested({ each: true })
+  @Type(() => CandidateProjectItemDto)
   @IsOptional()
-  @IsArray()
-  projects?: any[];
+  projects?: CandidateProjectItemDto[];
 
+  @IsArray({ message: 'Certifications must be an array' })
+  @ArrayMaxSize(50, { message: 'Certifications cannot exceed 50 entries' })
+  @ValidateNested({ each: true })
+  @Type(() => CandidateCertificationItemDto)
   @IsOptional()
-  @IsArray()
-  certifications?: any[];
+  certifications?: CandidateCertificationItemDto[];
 
+  @IsArray({ message: 'Languages must be an array' })
+  @ArrayMaxSize(50, { message: 'Languages cannot exceed 50 entries' })
+  @ValidateNested({ each: true })
+  @Type(() => CandidateLanguageItemDto)
+  @Transform(({ value }) => {
+    if (!Array.isArray(value)) return value;
+    return value.map((item) => {
+      if (typeof item === 'string') {
+        const obj = new CandidateLanguageItemDto();
+        obj.name = item.trim();
+        obj.proficiency = 'Fluent';
+        return obj;
+      }
+      return item;
+    });
+  })
   @IsOptional()
-  @IsArray()
-  languages?: any[];
+  languages?: CandidateLanguageItemDto[];
 
   @IsOptional()
   socialLinks?: Record<string, string>;
@@ -268,4 +420,3 @@ export class UpdateCandidateProfileDto {
   @IsString()
   coverUrl?: string;
 }
-

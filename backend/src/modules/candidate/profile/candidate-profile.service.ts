@@ -97,7 +97,7 @@ export class CandidateProfileService {
     private readonly prisma: PrismaService,
     private readonly scoringService: CandidateScoringService,
     private readonly cloudStorage: CloudStorageService,
-  ) {}
+  ) { }
 
   /**
    * Retrieves the authenticated candidate's profile.
@@ -189,8 +189,8 @@ export class CandidateProfileService {
     if (dto.projects !== undefined) {
       updateData.projects = Array.isArray(dto.projects)
         ? dto.projects
-            .filter((p) => p && typeof p === 'object' && !Array.isArray(p) && Boolean(p.title && String(p.title).trim()))
-            .map((p) => ({
+            .filter((p: any) => p && typeof p === 'object' && !Array.isArray(p) && Boolean(p.title && String(p.title).trim()))
+            .map((p: any) => ({
               title: String(p.title).trim(),
               role: p.role ? String(p.role).trim() : undefined,
               technologies: Array.isArray(p.technologies)
@@ -206,8 +206,8 @@ export class CandidateProfileService {
     if (dto.certifications !== undefined) {
       updateData.certifications = Array.isArray(dto.certifications)
         ? dto.certifications
-            .filter((c) => c && typeof c === 'object' && !Array.isArray(c) && Boolean((c.name || c.title) && String(c.name || c.title).trim()))
-            .map((c) => ({
+            .filter((c: any) => c && typeof c === 'object' && !Array.isArray(c) && Boolean((c.name || c.title) && String(c.name || c.title).trim()))
+            .map((c: any) => ({
               name: String(c.name || c.title).trim(),
               issuingOrg: String(c.issuingOrg || c.issuer || 'Organization').trim(),
               issueDate: c.issueDate ? String(c.issueDate).trim() : c.year ? String(c.year).trim() : undefined,
@@ -220,13 +220,13 @@ export class CandidateProfileService {
     if (dto.languages !== undefined) {
       updateData.languages = Array.isArray(dto.languages)
         ? dto.languages
-            .filter((l) => (typeof l === 'string' && l.trim()) || (l && typeof l === 'object' && !Array.isArray(l) && Boolean(l.name && String(l.name).trim())))
-            .map((l) => {
+            .filter((l: any) => (typeof l === 'string' && l.trim()) || (l && typeof l === 'object' && !Array.isArray(l) && Boolean((l.name || l.language) && String(l.name || l.language).trim())))
+            .map((l: any) => {
               if (typeof l === 'string') {
                 return { name: l.trim(), proficiency: 'Fluent' };
               }
               return {
-                name: String(l.name).trim(),
+                name: String(l.name || l.language).trim(),
                 proficiency: String(l.proficiency || 'Fluent').trim(),
               };
             })
@@ -340,10 +340,38 @@ export class CandidateProfileService {
     updateData.completionScore = scoreResult.score;
     updateData.completionBreakdown = scoreResult.breakdown as any;
 
+    console.log(
+      `[CandidateProfileService] 3. updateData before Prisma update for user ${actor.userId}:`,
+      JSON.stringify(
+        {
+          projects: updateData.projects,
+          certifications: updateData.certifications,
+          languages: updateData.languages,
+          completionScore: updateData.completionScore,
+        },
+        null,
+        2,
+      ),
+    );
+
     const updatedProfile = await this.prisma.candidateProfile.update({
       where: { id: profile.id },
       data: updateData,
     });
+
+    console.log(
+      `[CandidateProfileService] 4. Saved candidateProfile from DB for user ${actor.userId}:`,
+      JSON.stringify(
+        {
+          id: updatedProfile.id,
+          projects: updatedProfile.projects,
+          certifications: updatedProfile.certifications,
+          languages: updatedProfile.languages,
+        },
+        null,
+        2,
+      ),
+    );
 
     // Synchronize updates across any existing ATS Candidate records linked to this candidate
     // POLICY NOTE:
@@ -408,7 +436,7 @@ export class CandidateProfileService {
 
   private formatProfileResponse(user: any, profile: any): CandidateProfileResponse {
     const scoreResult = this.scoringService.calculateScore({ user, profile });
-    return {
+    const response: CandidateProfileResponse = {
       id: profile.id,
       userId: user.id,
       email: user.email,
@@ -443,40 +471,19 @@ export class CandidateProfileService {
       education: profile.education ?? [],
       experience: profile.experience ?? [],
       projects: Array.isArray(profile.projects)
-        ? profile.projects
-            .filter((p: any) => p && typeof p === 'object' && !Array.isArray(p) && Boolean(p.title && String(p.title).trim()))
-            .map((p: any) => ({
-              title: String(p.title).trim(),
-              role: p.role ? String(p.role).trim() : undefined,
-              technologies: Array.isArray(p.technologies) ? p.technologies : [],
-              url: p.url || p.link || undefined,
-              description: p.description || undefined,
-            }))
+        ? profile.projects.filter(
+            (p: any) => p && typeof p === 'object' && !Array.isArray(p) && Boolean(p.title && String(p.title).trim()),
+          )
         : [],
       certifications: Array.isArray(profile.certifications)
-        ? profile.certifications
-            .filter((c: any) => c && typeof c === 'object' && !Array.isArray(c) && Boolean((c.name || c.title) && String(c.name || c.title).trim()))
-            .map((c: any) => ({
-              name: String(c.name || c.title).trim(),
-              issuingOrg: String(c.issuingOrg || c.issuer || 'Organization').trim(),
-              issueDate: c.issueDate || c.year || undefined,
-              expiryDate: c.expiryDate || undefined,
-              credentialId: c.credentialId || undefined,
-              credentialUrl: c.credentialUrl || c.url || undefined,
-            }))
+        ? profile.certifications.filter(
+            (c: any) => c && typeof c === 'object' && !Array.isArray(c) && Boolean((c.name || c.title) && String(c.name || c.title).trim()),
+          )
         : [],
       languages: Array.isArray(profile.languages)
-        ? profile.languages
-            .filter((l: any) => (typeof l === 'string' && l.trim()) || (l && typeof l === 'object' && !Array.isArray(l) && Boolean(l.name && String(l.name).trim())))
-            .map((l: any) => {
-              if (typeof l === 'string') {
-                return { name: l.trim(), proficiency: 'Fluent' };
-              }
-              return {
-                name: String(l.name).trim(),
-                proficiency: String(l.proficiency || 'Fluent').trim(),
-              };
-            })
+        ? profile.languages.filter(
+            (l: any) => (typeof l === 'string' && l.trim()) || (l && typeof l === 'object' && !Array.isArray(l) && Boolean((l.name || l.language) && String(l.name || l.language).trim())),
+          )
         : [],
       socialLinks: profile.socialLinks || {},
       resume: {
@@ -496,6 +503,22 @@ export class CandidateProfileService {
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
     };
+
+    console.log(
+      `[CandidateProfileService] 5. formatProfileResponse for user ${user.id}:`,
+      JSON.stringify(
+        {
+          projects: response.projects,
+          certifications: response.certifications,
+          languages: response.languages,
+          completionScore: response.completionScore,
+        },
+        null,
+        2,
+      ),
+    );
+
+    return response;
   }
 
   /**
@@ -593,7 +616,7 @@ export class CandidateProfileService {
 
     const profile = user.candidateProfile;
     if (profile?.photoStorageKey) {
-      await this.cloudStorage.deletePrivateObject(profile.photoStorageKey).catch(() => {});
+      await this.cloudStorage.deletePrivateObject(profile.photoStorageKey).catch(() => { });
     }
 
     const updatedProfile = await this.prisma.candidateProfile.update({
@@ -701,7 +724,7 @@ export class CandidateProfileService {
 
     const profile = user.candidateProfile;
     if (profile?.coverStorageKey) {
-      await this.cloudStorage.deletePrivateObject(profile.coverStorageKey).catch(() => {});
+      await this.cloudStorage.deletePrivateObject(profile.coverStorageKey).catch(() => { });
     }
 
     const updatedProfile = await this.prisma.candidateProfile.update({

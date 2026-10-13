@@ -21,7 +21,11 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { CandidateEducationItemDto, CandidateExperienceItemDto } from './update-candidate-profile.dto';
+import {
+  CandidateEducationItemDto,
+  CandidateExperienceItemDto,
+  CandidateProjectItemDto,
+} from './update-candidate-profile.dto';
 
 const trimString = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
@@ -95,30 +99,6 @@ export class OnboardingStep2Dto {
   education?: CandidateEducationItemDto[];
 }
 
-// --- Project Item for Freshers/Profiles ---
-export class CandidateProjectItemDto {
-  @Transform(trimString)
-  @IsString()
-  @IsOptional()
-  id?: string;
-
-  @Transform(trimString)
-  @IsString({ message: 'Project title is required' })
-  @MaxLength(150, { message: 'Project title cannot exceed 150 characters' })
-  title: string;
-
-  @Transform(trimString)
-  @IsString()
-  @IsOptional()
-  @MaxLength(2000, { message: 'Project description cannot exceed 2000 characters' })
-  description?: string;
-
-  @Transform(trimString)
-  @IsString()
-  @IsOptional()
-  @MaxLength(255, { message: 'Project link cannot exceed 255 characters' })
-  link?: string;
-}
 
 // --- STEP 3: Professional Details ---
 export class OnboardingStep3Dto {

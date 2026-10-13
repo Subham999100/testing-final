@@ -14,10 +14,11 @@ import {
   Patch,
   Post,
   UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
@@ -53,6 +54,18 @@ export class CandidateProfileController {
     @CurrentUser() actor: AuthenticatedUser,
     @Body() dto: UpdateCandidateProfileDto,
   ): Promise<CandidateProfileResponse> {
+    console.log(
+      `[CandidateProfileController] 2. DTO received after ValidationPipe for user ${actor?.userId}:`,
+      JSON.stringify(
+        {
+          projects: dto.projects,
+          certifications: dto.certifications,
+          languages: dto.languages,
+        },
+        null,
+        2,
+      ),
+    );
     return this.profileService.updateProfile(actor, dto);
   }
 
@@ -63,9 +76,10 @@ export class CandidateProfileController {
   }
 
   @Post('photo')
+  @Post('avatar')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(
-    FileInterceptor('file', {
+    AnyFilesInterceptor({
       limits: {
         fileSize: 5 * 1024 * 1024,
       },
@@ -73,15 +87,30 @@ export class CandidateProfileController {
   )
   async uploadPhoto(
     @CurrentUser() actor: AuthenticatedUser,
-    @UploadedFile() file: any,
+    @UploadedFiles() files: any[],
+    @UploadedFile() singleFile?: any,
   ): Promise<CandidateProfileResponse> {
+    const list = Array.isArray(files) ? files : singleFile ? [singleFile] : [];
+    const file =
+      list.find((f) => ['avatar', 'photo', 'file'].includes(f?.fieldname)) ||
+      list[0] ||
+      singleFile;
     return this.profileService.uploadPhoto(actor, file);
+  }
+
+  @Delete('photo')
+  @Delete('avatar')
+  @HttpCode(HttpStatus.OK)
+  async deletePhoto(
+    @CurrentUser() actor: AuthenticatedUser,
+  ): Promise<CandidateProfileResponse> {
+    return this.profileService.deletePhoto(actor);
   }
 
   @Post('cover')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(
-    FileInterceptor('file', {
+    AnyFilesInterceptor({
       limits: {
         fileSize: 5 * 1024 * 1024,
       },
@@ -89,8 +118,14 @@ export class CandidateProfileController {
   )
   async uploadCover(
     @CurrentUser() actor: AuthenticatedUser,
-    @UploadedFile() file: any,
+    @UploadedFiles() files: any[],
+    @UploadedFile() singleFile?: any,
   ): Promise<CandidateProfileResponse> {
+    const list = Array.isArray(files) ? files : singleFile ? [singleFile] : [];
+    const file =
+      list.find((f) => ['cover', 'file'].includes(f?.fieldname)) ||
+      list[0] ||
+      singleFile;
     return this.profileService.uploadCover(actor, file);
   }
 
@@ -102,3 +137,4 @@ export class CandidateProfileController {
     return this.profileService.deleteCover(actor);
   }
 }
+

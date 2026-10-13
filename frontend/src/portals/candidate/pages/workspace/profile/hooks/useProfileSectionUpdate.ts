@@ -16,16 +16,29 @@ export function useProfileSectionUpdate() {
 
   return useMutation({
     mutationFn: async (payload: Partial<UpdateCandidateProfileRequest>) => {
-      return candidateApi.updateProfile<CandidateFullProfile>(payload);
+      console.log(
+        '[useProfileSectionUpdate] 1. REQUEST payload sent to PATCH /candidate/profile:',
+        JSON.stringify(payload, null, 2),
+      );
+      const res = await candidateApi.updateProfile<CandidateFullProfile>(payload);
+      console.log(
+        '[useProfileSectionUpdate] 1. API Response received from server:',
+        res,
+      );
+      return res;
     },
     onMutate: async (newSectionData) => {
-      console.log('[useProfileSectionUpdate] Starting update with payload:', newSectionData);
       // Cancel outgoing refetches so they don't overwrite optimistic update
       await queryClient.cancelQueries({ queryKey: candidateQueryKeys.profile });
 
       // Snapshot previous profile
       const previousProfile = queryClient.getQueryData<CandidateFullProfile>(
         candidateQueryKeys.profile,
+      );
+
+      console.log(
+        '[useProfileSectionUpdate] 6. FRONTEND CACHE: Optimistic update applying:',
+        newSectionData,
       );
 
       // Optimistically update profile in cache
@@ -39,7 +52,7 @@ export function useProfileSectionUpdate() {
       return { previousProfile };
     },
     onError: (err: any, _variables, context) => {
-      console.error('[useProfileSectionUpdate] Failed to update profile section:', err);
+      console.error('[useProfileSectionUpdate] Error during mutation, rolling back:', err);
       // Rollback to previous state
       if (context?.previousProfile) {
         queryClient.setQueryData(candidateQueryKeys.profile, context.previousProfile);
@@ -47,7 +60,15 @@ export function useProfileSectionUpdate() {
       toast.error(err?.message || 'Failed to update section. Please try again.');
     },
     onSuccess: (updatedProfile) => {
-      console.log('[useProfileSectionUpdate] Update succeeded, new profile:', updatedProfile);
+      console.log(
+        '[useProfileSectionUpdate] 6. FRONTEND CACHE: Server update succeeded, setting query cache with returned profile:',
+        {
+          projects: updatedProfile?.projects,
+          certifications: updatedProfile?.certifications,
+          languages: updatedProfile?.languages,
+          completionScore: updatedProfile?.completionScore,
+        },
+      );
       // Set the returned full profile with fresh server score
       if (updatedProfile) {
         queryClient.setQueryData(candidateQueryKeys.profile, updatedProfile);
@@ -55,10 +76,10 @@ export function useProfileSectionUpdate() {
       toast.success('Section updated successfully');
     },
     onSettled: () => {
+      console.log('[useProfileSectionUpdate] onSettled: Invalidating queries for fresh synchronization');
       // Ensure server data and scoring breakdown are synchronized
       void queryClient.invalidateQueries({ queryKey: candidateQueryKeys.profile });
       void queryClient.invalidateQueries({ queryKey: candidateQueryKeys.me });
     },
   });
 }
-
