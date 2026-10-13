@@ -7,12 +7,17 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
   Patch,
+  Post,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
@@ -55,5 +60,45 @@ export class CandidateProfileController {
   @HttpCode(HttpStatus.OK)
   async getOrganisations(): Promise<{ id: string; name: string }[]> {
     return this.profileService.getActiveOrganisations();
+  }
+
+  @Post('photo')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+      },
+    }),
+  )
+  async uploadPhoto(
+    @CurrentUser() actor: AuthenticatedUser,
+    @UploadedFile() file: any,
+  ): Promise<CandidateProfileResponse> {
+    return this.profileService.uploadPhoto(actor, file);
+  }
+
+  @Post('cover')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+      },
+    }),
+  )
+  async uploadCover(
+    @CurrentUser() actor: AuthenticatedUser,
+    @UploadedFile() file: any,
+  ): Promise<CandidateProfileResponse> {
+    return this.profileService.uploadCover(actor, file);
+  }
+
+  @Delete('cover')
+  @HttpCode(HttpStatus.OK)
+  async deleteCover(
+    @CurrentUser() actor: AuthenticatedUser,
+  ): Promise<CandidateProfileResponse> {
+    return this.profileService.deleteCover(actor);
   }
 }

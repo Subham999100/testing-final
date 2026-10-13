@@ -24,6 +24,8 @@ import {
   validateDocumentFile,
 } from '../../../integrations/storage/document-validator.util';
 import { CloudStorageService } from '../../../integrations/storage/storage.service';
+import { CandidateScoringService } from './candidate-scoring.service';
+import { ResumeParserService, ParsedResumeData } from './resume-parser.service';
 
 export interface UploadedFileObject {
   fieldname?: string;
@@ -41,6 +43,8 @@ export interface CandidateResumeMetadata {
   mimeType: string | null;
   uploadedAt: Date | null;
   hasText: boolean;
+  parseStatus?: string | null;
+  parsedData?: any;
 }
 
 export interface CandidateResumeDownloadResult {
@@ -122,6 +126,8 @@ export class CandidateResumeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cloudStorage: CloudStorageService,
+    private readonly parser: ResumeParserService,
+    private readonly scoringService: CandidateScoringService,
   ) {}
 
   /**
@@ -173,6 +179,18 @@ export class CandidateResumeService {
     }
 
     resumeText = await extractTextFromDocument(ext, file.buffer, this.logger);
+
+    let parsedData: ParsedResumeData | null = null;
+    let parseStatus: string = 'FAILED';
+    if (resumeText) {
+      try {
+        parsedData = await this.parser.parse(resumeText);
+        parseStatus = 'DONE';
+      } catch (parseErr: any) {
+        this.logger.warn(`Resume parse error: ${parseErr.message}`);
+        parseStatus = 'FAILED';
+      }
+    }
 
     // Retrieve candidate profile
     const user = await this.prisma.user.findUnique({
@@ -226,6 +244,15 @@ export class CandidateResumeService {
         resumeText,
       ].filter(Boolean).join(' ').trim();
 
+      // Calculate completion score with newly uploaded resume
+      const scoreResult = this.scoringService.calculateScore({
+        user,
+        profile: {
+          ...profile,
+          resumeStorageKey: newStorageKey,
+        },
+      });
+
       const updatedProfile = await this.prisma.candidateProfile.update({
         where: { id: profile.id },
         data: {
@@ -236,6 +263,10 @@ export class CandidateResumeService {
           resumeUploadedAt: new Date(),
           resumeText,
           searchableText,
+          resumeParseStatus: parseStatus,
+          rawParsedResume: parsedData as any,
+          completionScore: scoreResult.score,
+          completionBreakdown: scoreResult.breakdown as any,
         },
       });
 
@@ -284,6 +315,8 @@ export class CandidateResumeService {
         mimeType: updatedProfile.resumeMimeType,
         uploadedAt: updatedProfile.resumeUploadedAt,
         hasText: !!updatedProfile.resumeText,
+        parseStatus,
+        parsedData,
       };
     } catch (dbErr: any) {
       // Rollback: delete newly uploaded file from storage on database failure
@@ -313,6 +346,8 @@ export class CandidateResumeService {
         mimeType: null,
         uploadedAt: null,
         hasText: false,
+        parseStatus: null,
+        parsedData: null,
       };
     }
 
@@ -323,6 +358,103 @@ export class CandidateResumeService {
       mimeType: profile.resumeMimeType,
       uploadedAt: profile.resumeUploadedAt,
       hasText: !!profile.resumeText,
+      parseStatus: profile.resumeParseStatus || 'DONE',
+      parsedData: profile.rawParsedResume,
+    };
+  }
+
+  /**
+   * Poll parse status (stages: Uploading -> Reading -> Extracting -> Done / Failed)
+   */
+  async getParseStatus(actor: AuthenticatedUser) {
+    if (!actor?.userId || actor.role !== UserRole.CANDIDATE) {
+      throw new UnauthorizedException('Valid candidate authentication required');
+    }
+
+    const profile = await this.prisma.candidateProfile.findUnique({
+      where: { userId: actor.userId },
+    });
+
+    if (!profile || !profile.resumeStorageKey) {
+      return {
+        status: 'NONE',
+        hasResume: false,
+        parsedData: null,
+      };
+    }
+
+    return {
+      status: profile.resumeParseStatus || 'DONE',
+      hasResume: true,
+      fileName: profile.resumeFileName,
+      uploadedAt: profile.resumeUploadedAt,
+      parsedData: profile.rawParsedResume,
+    };
+  }
+
+  /**
+   * Merges parsed resume data into candidate profile.
+   * STRICT MERGE RULE: Only fills EMPTY fields; never overwrites user input.
+   */
+  async mergeParsedResume(actor: AuthenticatedUser) {
+    if (!actor?.userId || actor.role !== UserRole.CANDIDATE) {
+      throw new UnauthorizedException('Valid candidate authentication required');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: actor.userId },
+      include: { candidateProfile: true },
+    });
+
+    if (!user || !user.candidateProfile) {
+      throw new NotFoundException('Candidate profile not found');
+    }
+
+    const profile = user.candidateProfile;
+    const parsedData = profile.rawParsedResume as unknown as ParsedResumeData | null;
+    if (!parsedData) {
+      throw new BadRequestException('No parsed resume data available to merge');
+    }
+
+    const { merged, autoFilledFields } = this.parser.mergeParsedData(profile, parsedData);
+
+    const updateData: any = {};
+    if (autoFilledFields.includes('headline')) updateData.headline = merged.headline;
+    if (autoFilledFields.includes('location')) updateData.location = merged.location;
+    if (autoFilledFields.includes('phone')) updateData.phone = merged.phone;
+    if (autoFilledFields.includes('bio')) updateData.bio = merged.bio;
+    if (autoFilledFields.includes('skills')) updateData.skills = merged.skills;
+    if (autoFilledFields.includes('education')) updateData.education = merged.education;
+    if (autoFilledFields.includes('experience')) updateData.experience = merged.experience;
+    if (autoFilledFields.includes('projects')) updateData.projects = merged.projects;
+    if (autoFilledFields.includes('certifications')) updateData.certifications = merged.certifications;
+    if (autoFilledFields.includes('languages')) updateData.languages = merged.languages;
+    if (autoFilledFields.includes('socialLinks')) updateData.socialLinks = merged.socialLinks;
+
+    const existingFromResume = profile.fromResumeSections || [];
+    updateData.fromResumeSections = Array.from(new Set([...existingFromResume, ...autoFilledFields]));
+
+    const updatedProfile = await this.prisma.candidateProfile.update({
+      where: { id: profile.id },
+      data: updateData,
+    });
+
+    // Recompute score
+    const scoreResult = this.scoringService.calculateScore({ user, profile: updatedProfile });
+    await this.prisma.candidateProfile.update({
+      where: { id: profile.id },
+      data: {
+        completionScore: scoreResult.score,
+        completionBreakdown: scoreResult.breakdown as any,
+      },
+    });
+
+    return {
+      success: true,
+      autoFilledFields,
+      score: scoreResult.score,
+      breakdown: scoreResult.breakdown,
+      profile: updatedProfile,
     };
   }
 

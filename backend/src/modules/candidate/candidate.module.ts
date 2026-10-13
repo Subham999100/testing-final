@@ -17,10 +17,14 @@ import { CandidateAuthController } from './auth/candidate-auth.controller';
 import { CandidateAuthService } from './auth/candidate-auth.service';
 import { CandidateJobsController } from './jobs/candidate-jobs.controller';
 import { CandidateJobsService } from './jobs/candidate-jobs.service';
+import { CandidateOnboardingController } from './profile/candidate-onboarding.controller';
+import { CandidateOnboardingService } from './profile/candidate-onboarding.service';
 import { CandidateProfileController } from './profile/candidate-profile.controller';
 import { CandidateProfileService } from './profile/candidate-profile.service';
 import { CandidateResumeController } from './profile/candidate-resume.controller';
 import { CandidateResumeService } from './profile/candidate-resume.service';
+import { CandidateScoringService } from './profile/candidate-scoring.service';
+import { ResumeParserService } from './profile/resume-parser.service';
 
 @Module({
   imports: [
@@ -48,6 +52,7 @@ import { CandidateResumeService } from './profile/candidate-resume.service';
   ],
   controllers: [
     CandidateAuthController,
+    CandidateOnboardingController,
     CandidateProfileController,
     CandidateResumeController,
     CandidateJobsController,
@@ -55,6 +60,9 @@ import { CandidateResumeService } from './profile/candidate-resume.service';
   ],
   providers: [
     CandidateAuthService,
+    CandidateOnboardingService,
+    CandidateScoringService,
+    ResumeParserService,
     CandidateProfileService,
     CandidateResumeService,
     CandidateJobsService,
@@ -65,6 +73,9 @@ import { CandidateResumeService } from './profile/candidate-resume.service';
   ],
   exports: [
     CandidateAuthService,
+    CandidateOnboardingService,
+    CandidateScoringService,
+    ResumeParserService,
     CandidateProfileService,
     CandidateResumeService,
     CandidateJobsService,

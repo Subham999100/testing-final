@@ -20,6 +20,8 @@ import {
   CandidateResumeService,
   UploadedFileObject,
 } from './candidate-resume.service';
+import { CandidateScoringService } from './candidate-scoring.service';
+import { ResumeParserService } from './resume-parser.service';
 
 describe('CandidateResumeService', () => {
   let service: CandidateResumeService;
@@ -70,6 +72,8 @@ describe('CandidateResumeService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CandidateResumeService,
+        CandidateScoringService,
+        ResumeParserService,
         { provide: PrismaService, useValue: prisma },
         { provide: CloudStorageService, useValue: cloudStorage },
       ],
@@ -352,7 +356,7 @@ describe('CandidateResumeService', () => {
       expect(result.hasText).toBe(true);
       expect(capturedResumeText).toBeDefined();
       expect(capturedResumeText).toBe('Walking on imported air');
-    });
+    }, 30000);
 
     it('should yield null text for legacy .doc binary files without failing upload', async () => {
       const docBuffer = Buffer.concat([

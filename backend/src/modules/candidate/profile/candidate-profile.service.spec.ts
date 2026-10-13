@@ -8,7 +8,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UserRole } from '@prisma/client';
 import { AuthenticatedUser } from '../../../common/interfaces/authenticated-user.interface';
 import { PrismaService } from '../../../database/prisma.service';
+import { CloudStorageService } from '../../../integrations/storage/storage.service';
 import { CandidateProfileService } from './candidate-profile.service';
+import { CandidateScoringService } from './candidate-scoring.service';
 
 describe('CandidateProfileService', () => {
   let service: CandidateProfileService;
@@ -73,6 +75,14 @@ describe('CandidateProfileService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CandidateProfileService,
+        CandidateScoringService,
+        {
+          provide: CloudStorageService,
+          useValue: {
+            uploadFile: jest.fn().mockResolvedValue({ key: 'mock_key', url: 'mock_url' }),
+            deletePrivateObject: jest.fn().mockResolvedValue(true),
+          },
+        },
         { provide: PrismaService, useValue: prisma },
       ],
     }).compile();

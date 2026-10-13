@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "candidate_profiles" ADD COLUMN IF NOT EXISTS "coverStorageKey" TEXT,
+ADD COLUMN IF NOT EXISTS "coverUrl" TEXT,
+ADD COLUMN IF NOT EXISTS "fromResumeSections" TEXT[] DEFAULT ARRAY[]::TEXT[],
+ADD COLUMN IF NOT EXISTS "openToWork" BOOLEAN DEFAULT false;

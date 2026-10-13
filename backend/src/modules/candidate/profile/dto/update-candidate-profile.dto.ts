@@ -206,4 +206,65 @@ export class UpdateCandidateProfileDto {
   @IsString({ each: true, message: 'Each blocked organisation must be a string' })
   @IsOptional()
   blockedOrganisations?: string[];
+
+  @IsOptional()
+  @IsString()
+  phoneCountryCode?: string;
+
+  @IsOptional()
+  @IsString()
+  currentJobTitle?: string;
+
+  @IsOptional()
+  @IsInt()
+  experienceMonths?: number;
+
+  @IsOptional()
+  currentSalary?: number;
+
+  @IsOptional()
+  expectedSalary?: number;
+
+  @IsOptional()
+  @IsString()
+  noticePeriod?: string;
+
+  @IsOptional()
+  @IsArray()
+  preferredLocations?: string[];
+
+  @IsOptional()
+  @IsArray()
+  preferredJobTypes?: string[];
+
+  @IsOptional()
+  @IsArray()
+  preferredWorkModes?: string[];
+
+  @IsOptional()
+  @IsArray()
+  projects?: any[];
+
+  @IsOptional()
+  @IsArray()
+  certifications?: any[];
+
+  @IsOptional()
+  @IsArray()
+  languages?: string[];
+
+  @IsOptional()
+  socialLinks?: Record<string, string>;
+
+  @IsOptional()
+  @IsBoolean()
+  isFresher?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  openToWork?: boolean;
+
+  @IsOptional()
+  @IsString()
+  coverUrl?: string;
 }

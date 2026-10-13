@@ -12,7 +12,7 @@ model User {
   email                String                @unique
   passwordHash         String
   firstName            String
-  lastName             String
+  lastName             String?
   role                 UserRole              @default(CANDIDATE)
   isActive             Boolean               @default(true)
   isEmailVerified      Boolean               @default(false)
@@ -289,6 +289,19 @@ enum SecuritySeverity {
   CRITICAL
 }
 
+enum OnboardingStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETE
+}
+
+enum VideoInterviewStatus {
+  NOT_STARTED
+  SKIPPED
+  IN_PROGRESS
+  COMPLETED
+}
+
 // ============================================================
 // ORGANISATION PORTAL (Org Super Admin Â· Org Admin Â· Recruiter)
 // Additive models only. Tenant scoping is enforced in the service
@@ -512,7 +525,7 @@ model Candidate {
   organisationId  String
   userId          String?
   firstName       String
-  lastName        String
+  lastName        String?
   email           String
   phone           String?
   headline        String?
@@ -1187,31 +1200,61 @@ model RecruiterEmailRecipient {
 // ============================================================
 
 model CandidateProfile {
-  id               String    @id @default(uuid())
-  userId           String    @unique
-  phone            String?
-  headline         String?
-  location         String?
-  experienceYears  Int?
-  currentCompany   String?
-  skills           String[]  @default([])
-  bio              String?
-  education        Json?     @default("[]")
-  experience       Json?     @default("[]")
-  resumeStorageKey String?
-  resumeFileName   String?
-  resumeMimeType   String?
-  resumeFileSize   Int?
-  resumeUploadedAt DateTime?
+  id                   String               @id @default(uuid())
+  userId               String               @unique
+  phone                String?
+  phoneCountryCode     String?              @default("+91")
+  headline             String?
+  location             String?
+  dateOfBirth          DateTime?
+  gender               String?
+  isFresher            Boolean              @default(false)
+  experienceYears      Int?
+  experienceMonths     Int?                 @default(0)
+  currentCompany       String?
+  currentJobTitle      String?
+  currentSalary        BigInt?
+  expectedSalary       BigInt?
+  noticePeriod         String?
+  preferredLocations   String[]             @default([])
+  preferredJobTypes    String[]             @default([])
+  preferredWorkModes   String[]             @default([])
+  skills               String[]             @default([])
+  bio                  String?
+  photoStorageKey      String?
+  photoUrl             String?
+  coverStorageKey      String?
+  coverUrl             String?
+  openToWork           Boolean?             @default(false)
+  fromResumeSections   String[]             @default([])
+  education            Json?                @default("[]")
+  experience           Json?                @default("[]")
+  projects             Json?                @default("[]")
+  certifications       Json?                @default("[]")
+  languages            Json?                @default("[]")
+  socialLinks          Json?                @default("{}")
+  resumeStorageKey     String?
+  resumeFileName       String?
+  resumeMimeType       String?
+  resumeFileSize       Int?
+  resumeUploadedAt     DateTime?
   resumeText           String?
-  visibleToRecruiters  Boolean   @default(false)
-  blockedOrganisations String[]  @default([])
-  searchableText       String?   @db.Text
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
-  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resumeParseStatus    String?              @default("NONE")
+  rawParsedResume      Json?
+  onboardingStatus     OnboardingStatus     @default(NOT_STARTED)
+  onboardingStep       Int                  @default(1)
+  videoInterviewStatus VideoInterviewStatus @default(NOT_STARTED)
+  completionScore      Int                  @default(0)
+  completionBreakdown  Json?                @default("{}")
+  visibleToRecruiters  Boolean              @default(false)
+  blockedOrganisations String[]             @default([])
+  searchableText       String?              @db.Text
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([skills], type: Gin)
+  @@index([onboardingStatus])
   @@map("candidate_profiles")
 }
 

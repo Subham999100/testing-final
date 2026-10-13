@@ -91,4 +91,16 @@ export class CandidateResumeController {
   ): Promise<{ message: string }> {
     return this.resumeService.deleteResume(actor);
   }
+
+  @Get('parse-status')
+  @HttpCode(HttpStatus.OK)
+  async getParseStatus(@CurrentUser() actor: AuthenticatedUser) {
+    return this.resumeService.getParseStatus(actor);
+  }
+
+  @Post('parse-merge')
+  @HttpCode(HttpStatus.OK)
+  async mergeParsedResume(@CurrentUser() actor: AuthenticatedUser) {
+    return this.resumeService.mergeParsedResume(actor);
+  }
 }
