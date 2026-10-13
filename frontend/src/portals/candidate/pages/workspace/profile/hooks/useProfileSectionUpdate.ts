@@ -19,6 +19,7 @@ export function useProfileSectionUpdate() {
       return candidateApi.updateProfile<CandidateFullProfile>(payload);
     },
     onMutate: async (newSectionData) => {
+      console.log('[useProfileSectionUpdate] Starting update with payload:', newSectionData);
       // Cancel outgoing refetches so they don't overwrite optimistic update
       await queryClient.cancelQueries({ queryKey: candidateQueryKeys.profile });
 
@@ -38,6 +39,7 @@ export function useProfileSectionUpdate() {
       return { previousProfile };
     },
     onError: (err: any, _variables, context) => {
+      console.error('[useProfileSectionUpdate] Failed to update profile section:', err);
       // Rollback to previous state
       if (context?.previousProfile) {
         queryClient.setQueryData(candidateQueryKeys.profile, context.previousProfile);
@@ -45,6 +47,7 @@ export function useProfileSectionUpdate() {
       toast.error(err?.message || 'Failed to update section. Please try again.');
     },
     onSuccess: (updatedProfile) => {
+      console.log('[useProfileSectionUpdate] Update succeeded, new profile:', updatedProfile);
       // Set the returned full profile with fresh server score
       if (updatedProfile) {
         queryClient.setQueryData(candidateQueryKeys.profile, updatedProfile);
@@ -58,3 +61,4 @@ export function useProfileSectionUpdate() {
     },
   });
 }
+

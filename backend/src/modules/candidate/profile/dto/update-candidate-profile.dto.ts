@@ -251,7 +251,7 @@ export class UpdateCandidateProfileDto {
 
   @IsOptional()
   @IsArray()
-  languages?: string[];
+  languages?: any[];
 
   @IsOptional()
   socialLinks?: Record<string, string>;
@@ -268,3 +268,4 @@ export class UpdateCandidateProfileDto {
   @IsString()
   coverUrl?: string;
 }
+

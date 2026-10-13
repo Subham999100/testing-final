@@ -38,14 +38,28 @@ export const LanguagesSection: React.FC<LanguagesSectionProps> = ({ profile }) =
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
 
-  // Normalize languages into structured objects { name, proficiency }
-  const rawLanguages = profile.languages || [];
-  const normalizedLanguages: CandidateLanguageItem[] = rawLanguages.map((item) => {
-    if (typeof item === 'string') {
-      return { name: item, proficiency: 'Fluent' };
-    }
-    return item as CandidateLanguageItem;
-  });
+  // Normalize languages into structured objects { name, proficiency }, filtering invalid items
+  const rawLanguages = Array.isArray(profile.languages) ? profile.languages : [];
+  const normalizedLanguages: CandidateLanguageItem[] = rawLanguages
+    .map((item) => {
+      if (typeof item === 'string' && item.trim()) {
+        return { name: item.trim(), proficiency: 'Fluent' };
+      }
+      if (
+        item &&
+        typeof item === 'object' &&
+        !Array.isArray(item) &&
+        typeof (item as any).name === 'string' &&
+        (item as any).name.trim().length > 0
+      ) {
+        return {
+          name: (item as any).name.trim(),
+          proficiency: (item as any).proficiency || 'Fluent',
+        };
+      }
+      return null;
+    })
+    .filter((item): item is CandidateLanguageItem => item !== null);
 
   const isFromResume = Boolean(profile.fromResumeSections?.includes('languages'));
 
@@ -84,6 +98,7 @@ export const LanguagesSection: React.FC<LanguagesSectionProps> = ({ profile }) =
   };
 
   const onSubmit = async (values: LanguageFormValues) => {
+    console.log('[LanguagesSection] Submitting language form:', values);
     const newItem: CandidateLanguageItem = {
       name: values.name.trim(),
       proficiency: values.proficiency,
@@ -96,6 +111,7 @@ export const LanguagesSection: React.FC<LanguagesSectionProps> = ({ profile }) =
       nextList.push(newItem);
     }
 
+    console.log('[LanguagesSection] Applying language updates to backend:', nextList);
     await updateMutation.mutateAsync({ languages: nextList });
     setIsModalOpen(false);
   };
@@ -103,9 +119,11 @@ export const LanguagesSection: React.FC<LanguagesSectionProps> = ({ profile }) =
   const handleDeleteConfirm = async () => {
     if (deleteIndex === null) return;
     const nextList = normalizedLanguages.filter((_, i) => i !== deleteIndex);
+    console.log('[LanguagesSection] Deleting language, updated list:', nextList);
     await updateMutation.mutateAsync({ languages: nextList });
     setDeleteIndex(null);
   };
+
 
   return (
     <>

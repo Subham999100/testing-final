@@ -69,7 +69,7 @@ export interface CandidateProfileResponse {
   experience: any;
   projects: any;
   certifications: any;
-  languages: string[];
+  languages: any;
   socialLinks: any;
   resume: {
     hasResume: boolean;
@@ -186,9 +186,52 @@ export class CandidateProfileService {
     if (dto.preferredLocations !== undefined) updateData.preferredLocations = dto.preferredLocations;
     if (dto.preferredJobTypes !== undefined) updateData.preferredJobTypes = dto.preferredJobTypes;
     if (dto.preferredWorkModes !== undefined) updateData.preferredWorkModes = dto.preferredWorkModes;
-    if (dto.projects !== undefined) updateData.projects = dto.projects;
-    if (dto.certifications !== undefined) updateData.certifications = dto.certifications;
-    if (dto.languages !== undefined) updateData.languages = dto.languages;
+    if (dto.projects !== undefined) {
+      updateData.projects = Array.isArray(dto.projects)
+        ? dto.projects
+            .filter((p) => p && typeof p === 'object' && !Array.isArray(p) && Boolean(p.title && String(p.title).trim()))
+            .map((p) => ({
+              title: String(p.title).trim(),
+              role: p.role ? String(p.role).trim() : undefined,
+              technologies: Array.isArray(p.technologies)
+                ? p.technologies.map((t: any) => String(t).trim()).filter(Boolean)
+                : typeof p.technologies === 'string'
+                  ? p.technologies.split(',').map((t: string) => t.trim()).filter(Boolean)
+                  : [],
+              url: p.url ? String(p.url).trim() : p.link ? String(p.link).trim() : undefined,
+              description: p.description ? String(p.description).trim() : undefined,
+            }))
+        : [];
+    }
+    if (dto.certifications !== undefined) {
+      updateData.certifications = Array.isArray(dto.certifications)
+        ? dto.certifications
+            .filter((c) => c && typeof c === 'object' && !Array.isArray(c) && Boolean((c.name || c.title) && String(c.name || c.title).trim()))
+            .map((c) => ({
+              name: String(c.name || c.title).trim(),
+              issuingOrg: String(c.issuingOrg || c.issuer || 'Organization').trim(),
+              issueDate: c.issueDate ? String(c.issueDate).trim() : c.year ? String(c.year).trim() : undefined,
+              expiryDate: c.expiryDate ? String(c.expiryDate).trim() : undefined,
+              credentialId: c.credentialId ? String(c.credentialId).trim() : undefined,
+              credentialUrl: c.credentialUrl ? String(c.credentialUrl).trim() : c.url ? String(c.url).trim() : undefined,
+            }))
+        : [];
+    }
+    if (dto.languages !== undefined) {
+      updateData.languages = Array.isArray(dto.languages)
+        ? dto.languages
+            .filter((l) => (typeof l === 'string' && l.trim()) || (l && typeof l === 'object' && !Array.isArray(l) && Boolean(l.name && String(l.name).trim())))
+            .map((l) => {
+              if (typeof l === 'string') {
+                return { name: l.trim(), proficiency: 'Fluent' };
+              }
+              return {
+                name: String(l.name).trim(),
+                proficiency: String(l.proficiency || 'Fluent').trim(),
+              };
+            })
+        : [];
+    }
 
     // Validate socialLinks URLs (LinkedIn/GitHub domains)
     if (dto.socialLinks !== undefined) {
@@ -399,9 +442,42 @@ export class CandidateProfileService {
       bio: profile.bio,
       education: profile.education ?? [],
       experience: profile.experience ?? [],
-      projects: profile.projects ?? [],
-      certifications: profile.certifications ?? [],
-      languages: profile.languages || [],
+      projects: Array.isArray(profile.projects)
+        ? profile.projects
+            .filter((p: any) => p && typeof p === 'object' && !Array.isArray(p) && Boolean(p.title && String(p.title).trim()))
+            .map((p: any) => ({
+              title: String(p.title).trim(),
+              role: p.role ? String(p.role).trim() : undefined,
+              technologies: Array.isArray(p.technologies) ? p.technologies : [],
+              url: p.url || p.link || undefined,
+              description: p.description || undefined,
+            }))
+        : [],
+      certifications: Array.isArray(profile.certifications)
+        ? profile.certifications
+            .filter((c: any) => c && typeof c === 'object' && !Array.isArray(c) && Boolean((c.name || c.title) && String(c.name || c.title).trim()))
+            .map((c: any) => ({
+              name: String(c.name || c.title).trim(),
+              issuingOrg: String(c.issuingOrg || c.issuer || 'Organization').trim(),
+              issueDate: c.issueDate || c.year || undefined,
+              expiryDate: c.expiryDate || undefined,
+              credentialId: c.credentialId || undefined,
+              credentialUrl: c.credentialUrl || c.url || undefined,
+            }))
+        : [],
+      languages: Array.isArray(profile.languages)
+        ? profile.languages
+            .filter((l: any) => (typeof l === 'string' && l.trim()) || (l && typeof l === 'object' && !Array.isArray(l) && Boolean(l.name && String(l.name).trim())))
+            .map((l: any) => {
+              if (typeof l === 'string') {
+                return { name: l.trim(), proficiency: 'Fluent' };
+              }
+              return {
+                name: String(l.name).trim(),
+                proficiency: String(l.proficiency || 'Fluent').trim(),
+              };
+            })
+        : [],
       socialLinks: profile.socialLinks || {},
       resume: {
         hasResume: !!profile.resumeStorageKey,

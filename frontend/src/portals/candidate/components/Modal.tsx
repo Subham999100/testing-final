@@ -163,6 +163,7 @@ export const Modal: React.FC<ModalProps> = ({
 
           {/* Form wrapper */}
           <form
+            noValidate
             onSubmit={(e) => {
               if (onSubmit) {
                 e.preventDefault();

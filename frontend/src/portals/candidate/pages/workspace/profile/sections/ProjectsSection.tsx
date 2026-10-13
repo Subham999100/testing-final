@@ -21,7 +21,7 @@ const projectItemSchema = z.object({
   title: z.string().min(2, 'Project title is required'),
   role: z.string().optional(),
   technologies: z.string().optional(),
-  url: z.string().url('Must be a valid URL (e.g. https://github.com/...)').or(z.literal('')).optional(),
+  url: z.string().trim().optional().or(z.literal('')),
   description: z.string().max(2000, 'Description must not exceed 2000 characters').optional(),
 });
 
@@ -37,7 +37,30 @@ export const ProjectsSection: React.FC<ProjectsSectionProps> = ({ profile }) => 
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
 
-  const projects = profile.projects || [];
+  // Normalize and strictly filter out invalid/empty array objects from malformed resume data
+  const rawProjects = Array.isArray(profile.projects) ? profile.projects : [];
+  const projects: CandidateProjectItem[] = rawProjects
+    .filter((item): item is CandidateProjectItem =>
+      Boolean(
+        item &&
+        typeof item === 'object' &&
+        !Array.isArray(item) &&
+        typeof (item as any).title === 'string' &&
+        (item as any).title.trim().length > 0,
+      ),
+    )
+    .map((item) => ({
+      title: (item as any).title.trim(),
+      role: (item as any).role?.trim() || undefined,
+      technologies: Array.isArray((item as any).technologies)
+        ? (item as any).technologies.map((t: any) => String(t).trim()).filter(Boolean)
+        : typeof (item as any).technologies === 'string'
+          ? (item as any).technologies.split(',').map((t: string) => t.trim()).filter(Boolean)
+          : undefined,
+      url: (item as any).url?.trim() || (item as any).link?.trim() || undefined,
+      description: (item as any).description?.trim() || undefined,
+    }));
+
   const isFromResume = Boolean(profile.fromResumeSections?.includes('projects'));
 
   const {
@@ -84,6 +107,7 @@ export const ProjectsSection: React.FC<ProjectsSectionProps> = ({ profile }) => 
   };
 
   const onSubmit = async (values: ProjectFormValues) => {
+    console.log('[ProjectsSection] Submitting project form:', values);
     const techArray = values.technologies
       ? values.technologies
           .split(',')
@@ -91,11 +115,16 @@ export const ProjectsSection: React.FC<ProjectsSectionProps> = ({ profile }) => 
           .filter(Boolean)
       : [];
 
+    let cleanUrl = values.url?.trim() || undefined;
+    if (cleanUrl && !/^https?:\/\//i.test(cleanUrl)) {
+      cleanUrl = `https://${cleanUrl}`;
+    }
+
     const newItem: CandidateProjectItem = {
       title: values.title.trim(),
       role: values.role?.trim() || undefined,
       technologies: techArray.length > 0 ? techArray : undefined,
-      url: values.url?.trim() || undefined,
+      url: cleanUrl,
       description: values.description?.trim() || undefined,
     };
 
@@ -106,9 +135,11 @@ export const ProjectsSection: React.FC<ProjectsSectionProps> = ({ profile }) => 
       nextList.push(newItem);
     }
 
+    console.log('[ProjectsSection] Applying project updates to backend:', nextList);
     await updateMutation.mutateAsync({ projects: nextList });
     setIsModalOpen(false);
   };
+
 
   const handleDeleteConfirm = async () => {
     if (deleteIndex === null) return;
@@ -255,13 +286,13 @@ export const ProjectsSection: React.FC<ProjectsSectionProps> = ({ profile }) => 
 
             <div>
               <label htmlFor="proj-url" className="block text-xs font-semibold text-[#1B1A17] mb-1">
-                Project / Demo URL
+                Project / Demo Link <span className="text-[#5C564E] font-normal">(Optional)</span>
               </label>
               <input
                 id="proj-url"
-                type="url"
+                type="text"
                 {...register('url')}
-                placeholder="https://github.com/..."
+                placeholder="e.g. github.com/user/project or https://..."
                 className="w-full px-3.5 py-2.5 rounded-xl border border-[#E8DFD4] bg-white text-sm text-[#1B1A17] placeholder-[#5C564E]/60 focus:outline-none focus:ring-2 focus:ring-[#C2410C]/20"
               />
               {errors.url && (
@@ -270,6 +301,7 @@ export const ProjectsSection: React.FC<ProjectsSectionProps> = ({ profile }) => 
                 </p>
               )}
             </div>
+
           </div>
 
           <div>

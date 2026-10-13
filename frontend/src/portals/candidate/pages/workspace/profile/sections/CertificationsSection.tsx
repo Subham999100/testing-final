@@ -22,7 +22,7 @@ const certItemSchema = z.object({
   issueDate: z.string().optional(),
   expiryDate: z.string().optional(),
   credentialId: z.string().optional(),
-  credentialUrl: z.string().url('Must be a valid URL').or(z.literal('')).optional(),
+  credentialUrl: z.string().trim().optional().or(z.literal('')),
 });
 
 type CertFormValues = z.infer<typeof certItemSchema>;
@@ -37,7 +37,27 @@ export const CertificationsSection: React.FC<CertificationsSectionProps> = ({ pr
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
 
-  const certs = profile.certifications || [];
+  // Normalize and strictly filter out invalid/empty array objects from malformed resume data
+  const rawCerts = Array.isArray(profile.certifications) ? profile.certifications : [];
+  const certs: CandidateCertificationItem[] = rawCerts
+    .filter((item): item is CandidateCertificationItem =>
+      Boolean(
+        item &&
+        typeof item === 'object' &&
+        !Array.isArray(item) &&
+        typeof (item as any).name === 'string' &&
+        (item as any).name.trim().length > 0,
+      ),
+    )
+    .map((item) => ({
+      name: (item as any).name.trim(),
+      issuingOrg: (item as any).issuingOrg?.trim() || (item as any).issuer?.trim() || 'Organization',
+      issueDate: (item as any).issueDate?.trim() || (item as any).year?.toString().trim() || undefined,
+      expiryDate: (item as any).expiryDate?.trim() || undefined,
+      credentialId: (item as any).credentialId?.trim() || undefined,
+      credentialUrl: (item as any).credentialUrl?.trim() || (item as any).url?.trim() || undefined,
+    }));
+
   const isFromResume = Boolean(profile.fromResumeSections?.includes('certifications'));
 
   const {
@@ -87,13 +107,19 @@ export const CertificationsSection: React.FC<CertificationsSectionProps> = ({ pr
   };
 
   const onSubmit = async (values: CertFormValues) => {
+    console.log('[CertificationsSection] Submitting certification form:', values);
+    let cleanUrl = values.credentialUrl?.trim() || undefined;
+    if (cleanUrl && !/^https?:\/\//i.test(cleanUrl)) {
+      cleanUrl = `https://${cleanUrl}`;
+    }
+
     const newItem: CandidateCertificationItem = {
       name: values.name.trim(),
       issuingOrg: values.issuingOrg.trim(),
       issueDate: values.issueDate?.trim() || undefined,
       expiryDate: values.expiryDate?.trim() || undefined,
       credentialId: values.credentialId?.trim() || undefined,
-      credentialUrl: values.credentialUrl?.trim() || undefined,
+      credentialUrl: cleanUrl,
     };
 
     const nextList = [...certs];
@@ -103,9 +129,11 @@ export const CertificationsSection: React.FC<CertificationsSectionProps> = ({ pr
       nextList.push(newItem);
     }
 
+    console.log('[CertificationsSection] Applying certifications update to backend:', nextList);
     await updateMutation.mutateAsync({ certifications: nextList });
     setIsModalOpen(false);
   };
+
 
   const handleDeleteConfirm = async () => {
     if (deleteIndex === null) return;
@@ -278,13 +306,13 @@ export const CertificationsSection: React.FC<CertificationsSectionProps> = ({ pr
 
             <div>
               <label htmlFor="cert-url" className="block text-xs font-semibold text-[#1B1A17] mb-1">
-                Credential URL
+                Credential Link <span className="text-[#5C564E] font-normal">(Optional)</span>
               </label>
               <input
                 id="cert-url"
-                type="url"
+                type="text"
                 {...register('credentialUrl')}
-                placeholder="https://credly.com/..."
+                placeholder="e.g. credly.com/... or https://..."
                 className="w-full px-3.5 py-2.5 rounded-xl border border-[#E8DFD4] bg-white text-sm text-[#1B1A17] placeholder-[#5C564E]/60 focus:outline-none focus:ring-2 focus:ring-[#C2410C]/20"
               />
               {errors.credentialUrl && (
