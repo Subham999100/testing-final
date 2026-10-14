@@ -20,6 +20,13 @@ const page = (loader: Loader, name: string) =>
   lazy(() => loader().then((m) => ({ default: m[name] as React.ComponentType })));
 
 const Dashboard = page(loaders.dashboard, 'DashboardPage');
+const RecruiterDashboard = page(loaders.recruiterDashboard, 'DashboardPage');
+const RecruiterCandidates = page(loaders.recruiterCandidates, 'CandidatesPage');
+const RecruiterCandidateDetail = page(loaders.recruiterCandidates, 'CandidateDetailPage');
+const Folders = page(loaders.folders, 'FoldersPage');
+const Reports = page(loaders.reports, 'ReportsPage');
+const ScheduleInterview = page(loaders.recruitmentActions, 'ScheduleInterviewPage');
+const NewOffer = page(loaders.recruitmentActions, 'NewOfferPage');
 const Members = page(loaders.team, 'MembersPage');
 const Recruiters = page(loaders.team, 'RecruitersPage');
 const RolesPermissions = page(loaders.team, 'RolesPermissionsPage');
@@ -113,6 +120,21 @@ function MembersRoute() {
   return <Members />;
 }
 
+function DashboardRoute() {
+  const { role } = usePermissions();
+  return role === 'RECRUITER' ? <RecruiterDashboard /> : <Dashboard />;
+}
+
+function CandidatesRoute() {
+  const { role } = usePermissions();
+  return role === 'RECRUITER' ? <RecruiterCandidates /> : <Candidates />;
+}
+
+function CandidateDetailRoute() {
+  const { role } = usePermissions();
+  return role === 'RECRUITER' ? <RecruiterCandidateDetail /> : <CandidateDetail />;
+}
+
 const P = {
   jobs: ['jobs.read.all', 'jobs.read.assigned'],
   apps: ['applications.read.all', 'applications.read.assigned'],
@@ -128,7 +150,7 @@ export default function OrgPortal() {
       <Route path="accept-invite" element={<AcceptInvitePage />} />
       <Route path="change-password" element={<ChangePasswordPage />} />
       <Route element={<OrgShell />}>
-        <Route index element={<Guard><Dashboard /></Guard>} />
+        <Route index element={<Guard><DashboardRoute /></Guard>} />
 
         {/* Governance & People */}
         <Route path="recruiters" element={<Guard perms={['members.read', 'recruiters.manage']}><Recruiters /></Guard>} />
@@ -156,14 +178,20 @@ export default function OrgPortal() {
         <Route path="notifications" element={<Guard><Notifications /></Guard>} />
         <Route path="profile" element={<Guard><Profile /></Guard>} />
 
+        {/* Recruiter Workspace routes; prevent the Super Admin entering the recruiter UI. */}
+        <Route path="folders" element={<Guard perms={['candidates.save']} disallowedRoles={NO_OSA}><Folders /></Guard>} />
+        <Route path="reports" element={<Guard perms={['analytics.self', 'analytics.recruiter', 'analytics.org']} disallowedRoles={NO_OSA}><Reports /></Guard>} />
+        <Route path="interviews/new" element={<Guard perms={['interviews.schedule']} disallowedRoles={NO_OSA}><Guard perms={P.apps}><ScheduleInterview /></Guard></Guard>} />
+        <Route path="offers/new" element={<Guard perms={['offers.create']} disallowedRoles={NO_OSA}><Guard perms={P.apps}><NewOffer /></Guard></Guard>} />
+
         {/* Recruiter Workflow Routes (Disallowed for Organisation Super Admin) */}
         <Route path="jobs" element={<Guard perms={P.jobs} disallowedRoles={NO_OSA}><Jobs /></Guard>} />
         <Route path="jobs/new" element={<Guard perms={['jobs.create']} disallowedRoles={NO_OSA}><JobForm /></Guard>} />
         <Route path="jobs/:id" element={<Guard perms={P.jobs} disallowedRoles={NO_OSA}><JobDetail /></Guard>} />
         <Route path="jobs/:id/edit" element={<Guard perms={['jobs.update']} disallowedRoles={NO_OSA}><JobForm /></Guard>} />
         <Route path="jobs/:id/pipeline" element={<Guard perms={P.apps} disallowedRoles={NO_OSA}><Pipeline /></Guard>} />
-        <Route path="candidates" element={<Guard perms={P.cands} disallowedRoles={NO_OSA}><Candidates /></Guard>} />
-        <Route path="candidates/:id" element={<Guard perms={['candidates.read']} disallowedRoles={NO_OSA}><CandidateDetail /></Guard>} />
+        <Route path="candidates" element={<Guard perms={P.cands} disallowedRoles={NO_OSA}><CandidatesRoute /></Guard>} />
+        <Route path="candidates/:id" element={<Guard perms={['candidates.read']} disallowedRoles={NO_OSA}><CandidateDetailRoute /></Guard>} />
         <Route path="applications" element={<Guard perms={P.apps} disallowedRoles={NO_OSA}><Applications /></Guard>} />
         <Route path="applications/:id" element={<Guard perms={P.apps} disallowedRoles={NO_OSA}><ApplicationDetail /></Guard>} />
         <Route path="interviews" element={<Guard perms={['interviews.read']} disallowedRoles={NO_OSA}><Interviews /></Guard>} />

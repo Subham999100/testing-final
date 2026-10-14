@@ -5,6 +5,10 @@
 // JwtAuthGuard. Adds no global providers and changes no platform routes.
 // ============================================================
 
+import { RecruiterController } from './recruiter/recruiter.controller';
+import { RecruiterService } from './recruiter/recruiter.service';
+import { RecruiterReportsService } from './recruiter/reports.service';
+import { RecruiterOutreachService } from './recruiter/outreach.service';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -55,6 +59,7 @@ import { OrgSupportService } from './support/org-support.service';
     }),
   ],
   controllers: [
+    RecruiterController,
     OrgAuthController,
     OrgPublicInvitationsController,
     OrgMembersController,
@@ -71,6 +76,9 @@ import { OrgSupportService } from './support/org-support.service';
     OrgSupportController,
   ],
   providers: [
+    RecruiterOutreachService,
+    RecruiterReportsService,
+    RecruiterService,
     JwtAuthGuard,
     RolesGuard,
     PermissionsGuard,

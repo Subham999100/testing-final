@@ -94,16 +94,19 @@ export function JobsPage() {
   const [params] = useSearchParams();
   const [status, setStatus] = useState(params.get('view') === 'approvals' ? 'IN_REVIEW' : params.get('status') ?? '');
   const [search, setSearch] = useState(params.get('search') ?? '');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(1);
   const q = useDebounced(search);
-  const filters = { status, search: q, page };
+  const isDateRangeInvalid = !!(startDate && endDate && startDate > endDate);
+  const filters = { status, search: q, startDate: isDateRangeInvalid ? '' : startDate, endDate: isDateRangeInvalid ? '' : endDate, page };
   const { data, isFetching } = useQuery({
     queryKey: qk.jobs.list(filters),
     queryFn: () => api.page<JobRow>('/org/jobs', { ...filters, limit: 20 }),
     placeholderData: keepPreviousData,
     staleTime: STALE.list,
   });
-  useEffect(() => setPage(1), [status, q]);
+  useEffect(() => setPage(1), [status, q, startDate, endDate]);
 
   return (
     <>
@@ -125,22 +128,44 @@ export function JobsPage() {
         onPage={setPage}
         onRowClick={(j) => navigate(`/org/jobs/${j.id}`)}
         toolbar={
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <FilterChips
-              value={status}
-              onChange={setStatus}
-              options={[
-                { value: '', label: 'All' },
-                { value: 'PUBLISHED', label: 'Active' },
-                { value: 'DRAFT', label: 'Drafts' },
-                { value: 'IN_REVIEW', label: 'In review' },
-                { value: 'PAUSED', label: 'Paused' },
-                { value: 'CLOSED', label: 'Closed' },
-                { value: 'ARCHIVED', label: 'Archived' },
-              ]}
-            />
-            <Input placeholder="Search title, department, location" value={search} onChange={(e) => setSearch(e.target.value)} className="lg:w-72" />
-          </div>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <FilterChips
+                value={status}
+                onChange={setStatus}
+                options={[
+                  { value: '', label: 'All' },
+                  { value: 'PUBLISHED', label: 'Active' },
+                  { value: 'DRAFT', label: 'Drafts' },
+                  { value: 'IN_REVIEW', label: 'In review' },
+                  { value: 'PAUSED', label: 'Paused' },
+                  { value: 'CLOSED', label: 'Closed' },
+                  { value: 'ARCHIVED', label: 'Archived' },
+                ]}
+              />
+              <Input placeholder="Search title, department, location" value={search} onChange={(e) => setSearch(e.target.value)} className="lg:w-64" />
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium text-slate-600 whitespace-nowrap">Created:</span>
+                <Input type="date" aria-label="Created from" title="Created from" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-36 text-xs" />
+                <span className="text-slate-400 text-xs">to</span>
+                <Input type="date" aria-label="Created to" title="Created to" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-36 text-xs" />
+                {(startDate || endDate) && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setStartDate('');
+                      setEndDate('');
+                    }}
+                  >
+                    Clear dates
+                  </Button>
+                )}
+                {isDateRangeInvalid && (
+                  <span className="text-xs text-rose-600">Start date cannot be after end date</span>
+                )}
+              </div>
+            </div>
         }
         empty={
           <EmptyState
@@ -213,9 +238,48 @@ export function JobFormPage() {
   const qc = useQueryClient();
   const editing = !!id;
   const { data: job } = useQuery({ queryKey: qk.jobs.detail(id ?? 'new'), queryFn: () => api.get<JobDetail>(`/org/jobs/${id}`), enabled: editing });
-  const { register, handleSubmit, reset, formState } = useForm<JobForm>({
+  const { register, handleSubmit, reset, setValue, watch, formState } = useForm<JobForm>({
     resolver: zodResolver(jobSchema),
     defaultValues: { workMode: 'ONSITE', employmentType: 'FULL_TIME', openings: 1, currency: 'INR' },
+  });
+
+  const { data: notifPrefs } = useQuery({
+    queryKey: qk.notifications.prefs,
+    queryFn: () => api.get<{ types: string[]; muted: string[] }>('/org/notifications/preferences'),
+  });
+  const updateNotifPrefs = useMutation({
+    mutationFn: (mutedTypes: string[]) => api.put<{ types: string[]; muted: string[] }>('/org/notifications/preferences', { mutedTypes }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.notifications.prefs });
+      toast.success('Notification preferences updated');
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+
+  const aiGenerate = useMutation({
+    mutationFn: async () => {
+      const title = watch('title');
+      if (!title || title.trim().length < 3) {
+        throw new Error('Please enter a job title (at least 3 characters) first.');
+      }
+      return api.post<{ description: string; requiredSkills: string[]; preferredSkills: string[] }>(
+        '/org/ai/generate-job-content',
+        {
+          title: title.trim(),
+          description: watch('description') || undefined,
+          requiredSkills: splitList(watch('requiredSkills') ?? ''),
+        },
+      );
+    },
+    onSuccess: (data) => {
+      if (data.description) setValue('description', data.description, { shouldDirty: true, shouldValidate: true });
+      if (data.requiredSkills?.length) setValue('requiredSkills', data.requiredSkills.join(', '), { shouldDirty: true });
+      if (data.preferredSkills?.length) setValue('preferredSkills', data.preferredSkills.join(', '), { shouldDirty: true });
+      qc.invalidateQueries({ queryKey: qk.tokens.all });
+      qc.invalidateQueries({ queryKey: qk.me });
+      toast.success('Generated job description and skills using AI');
+    },
+    onError: (e) => toast.error(errorMessage(e)),
   });
 
   useEffect(() => {
@@ -297,16 +361,119 @@ export function JobFormPage() {
         }
       />
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="space-y-4 p-5 lg:col-span-2">
-          <Field label="Job title" error={err.title?.message}>
-            <Input {...register('title')} placeholder="e.g. Senior React Developer" />
+        <Card className="space-y-6 p-5 lg:col-span-1">
+          <div>
+            <h3 className="mb-4 text-lg font-semibold text-slate-800">Posting details</h3>
+            <Field label="Job type">
+              <Select {...register('employmentType')}>
+                <option value="FULL_TIME">Permanent / Full time</option>
+                <option value="CONTRACT">Contract</option>
+                <option value="INTERNSHIP">Internship</option>
+                <option value="PART_TIME">Part time</option>
+              </Select>
+            </Field>
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-sm font-medium text-slate-700">Schedule job post</span>
+            <p className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-500">
+              Scheduled posting is currently unavailable. Jobs are created as drafts and published manually or via the approval workflow.
+            </p>
+          </div>
+
+          <Field label="Expiry date">
+            <Input type="date" {...register('deadline')} />
           </Field>
-          <Field label="Description" error={err.description?.message}>
-            <Textarea rows={8} {...register('description')} />
+
+          <div className="space-y-3">
+            <h3 className="text-lg font-semibold text-slate-800">Notify me for</h3>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={!(notifPrefs?.muted ?? []).includes('application.assigned')}
+                disabled={updateNotifPrefs.isPending}
+                onChange={(e) => {
+                  const currentMuted = notifPrefs?.muted ?? [];
+                  const newMuted = e.target.checked
+                    ? currentMuted.filter((t) => t !== 'application.assigned' && t !== 'application.stage')
+                    : [...new Set([...currentMuted, 'application.assigned', 'application.stage'])];
+                  updateNotifPrefs.mutate(newMuted);
+                }}
+              />
+              Individual applications & stage moves
+            </label>
+            <p className="text-xs text-slate-400">Settings are saved directly to your member profile.</p>
+          </div>
+        </Card>
+
+        <Card className="space-y-6 p-5 lg:col-span-2">
+          <div>
+            <h3 className="mb-4 text-lg font-semibold text-slate-800">Job details</h3>
+            <Field label="Job title *" error={err.title?.message}>
+              <Input {...register('title')} placeholder="Search job title" />
+            </Field>
+          </div>
+
+          <div className="space-y-3">
+            <span className="text-sm font-medium text-slate-700">Experience *</span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className={`rounded-full border px-4 py-1.5 text-sm transition-colors ${
+                  watch('experienceMin') === 0 && watch('experienceMax') === 0
+                    ? 'border-indigo-600 bg-indigo-50 font-medium text-indigo-700'
+                    : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                }`}
+                onClick={() => {
+                  setValue('experienceMin', 0, { shouldDirty: true, shouldValidate: true });
+                  setValue('experienceMax', 0, { shouldDirty: true, shouldValidate: true });
+                }}
+              >
+                Fresher only
+              </button>
+              <button
+                type="button"
+                className={`rounded-full border px-4 py-1.5 text-sm transition-colors ${
+                  Number(watch('experienceMin')) >= 1
+                    ? 'border-indigo-600 bg-indigo-50 font-medium text-indigo-700'
+                    : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                }`}
+                onClick={() => {
+                  setValue('experienceMin', 1, { shouldDirty: true, shouldValidate: true });
+                  if (!watch('experienceMax') || Number(watch('experienceMax')) < 1) {
+                    setValue('experienceMax', 5, { shouldDirty: true, shouldValidate: true });
+                  }
+                }}
+              >
+                Experienced only
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Min experience (years) *" error={err.experienceMin?.message}>
+              <Input type="number" min={0} {...register('experienceMin')} placeholder="Years" />
+            </Field>
+            <Field label="Max experience (years) *" error={err.experienceMax?.message}>
+              <Input type="number" min={0} {...register('experienceMax')} placeholder="Years" />
+            </Field>
+          </div>
+
+          <Button
+            type="button"
+            variant="secondary"
+            icon={Sparkles}
+            className="w-fit"
+            loading={aiGenerate.isPending}
+            onClick={() => aiGenerate.mutate()}
+          >
+            Generate skills & job description by AI
+          </Button>
+
+          <Field label="Job description *" error={err.description?.message}>
+            <Textarea rows={8} {...register('description')} placeholder="Outlines the roles and responsibilities the candidate will perform in this role" />
           </Field>
-          <Field label="Responsibilities">
-            <Textarea rows={4} {...register('responsibilities')} />
-          </Field>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Required skills" hint="Comma separated">
               <Input {...register('requiredSkills')} placeholder="React, TypeScript" />
@@ -315,12 +482,11 @@ export function JobFormPage() {
               <Input {...register('preferredSkills')} placeholder="GraphQL" />
             </Field>
           </div>
-          <Field label="Screening questions" hint="One per line">
-            <Textarea rows={3} {...register('screeningQuestions')} />
-          </Field>
-        </Card>
-        <Card className="space-y-4 p-5">
+
           <div className="grid grid-cols-2 gap-3">
+            <Field label="Location">
+              <Input {...register('location')} />
+            </Field>
             <Field label="Work mode">
               <Select {...register('workMode')}>
                 <option value="ONSITE">On-site</option>
@@ -328,25 +494,8 @@ export function JobFormPage() {
                 <option value="REMOTE">Remote</option>
               </Select>
             </Field>
-            <Field label="Type">
-              <Select {...register('employmentType')}>
-                <option value="FULL_TIME">Full time</option>
-                <option value="PART_TIME">Part time</option>
-                <option value="CONTRACT">Contract</option>
-                <option value="INTERNSHIP">Internship</option>
-              </Select>
-            </Field>
           </div>
-          <Field label="Location">
-            <Input {...register('location')} />
-          </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Min experience (yrs)" error={err.experienceMin?.message}>
-              <Input type="number" min={0} {...register('experienceMin')} />
-            </Field>
-            <Field label="Max experience (yrs)" error={err.experienceMax?.message}>
-              <Input type="number" min={0} {...register('experienceMax')} />
-            </Field>
             <Field label="Min salary" error={err.salaryMin?.message}>
               <Input type="number" min={0} {...register('salaryMin')} />
             </Field>
@@ -354,26 +503,6 @@ export function JobFormPage() {
               <Input type="number" min={0} {...register('salaryMax')} />
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Currency">
-              <Input maxLength={3} {...register('currency')} />
-            </Field>
-            <Field label="Openings" error={err.openings?.message}>
-              <Input type="number" min={1} {...register('openings')} />
-            </Field>
-          </div>
-          <Field label="Department">
-            <Input {...register('department')} />
-          </Field>
-          <Field label="Industry">
-            <Input {...register('industry')} />
-          </Field>
-          <Field label="Education">
-            <Input {...register('education')} />
-          </Field>
-          <Field label="Application deadline">
-            <Input type="date" {...register('deadline')} />
-          </Field>
         </Card>
       </div>
     </form>

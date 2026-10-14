@@ -14,6 +14,7 @@ import { ROLE_LABEL, TOKEN_KEY, clearToken, getToken, useLogout, useMe, usePermi
 import { Toaster } from '../ui/toast';
 import { Avatar, Skeleton, cn } from '../ui/ui';
 import { getNav, loaders } from './nav';
+import { RecruiterNav } from '../recruiter/RecruiterNav';
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { can, me, role } = usePermissions();
@@ -232,12 +233,13 @@ export function OrgShell() {
     return <Navigate to="/org/change-password" replace />;
   }
 
+  const isRecruiter = me?.user.role === 'RECRUITER';
   return (
-    <div className="org-portal flex h-screen w-full bg-slate-50 text-slate-800">
-      <aside className="hidden w-60 shrink-0 border-r border-slate-200 bg-white lg:block">
+    <div className={`org-portal flex h-screen w-full bg-slate-50 text-slate-800 ${isRecruiter ? 'recruiter-shell' : ''}`}>
+      {!isRecruiter && <aside className="hidden w-60 shrink-0 border-r border-slate-200 bg-white lg:block">
         {isLoading ? <Skeleton className="m-4 h-8" /> : <Sidebar />}
-      </aside>
-      {drawer && (
+      </aside>}
+      {!isRecruiter && drawer && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-slate-900/30" onClick={() => setDrawer(false)} />
           <aside className="relative h-full w-64 bg-white shadow-xl">
@@ -249,7 +251,7 @@ export function OrgShell() {
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar onMenu={() => setDrawer(true)} />
+        {isRecruiter ? <RecruiterNav /> : <Topbar onMenu={() => setDrawer(true)} />}
         <main className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
             <Outlet />

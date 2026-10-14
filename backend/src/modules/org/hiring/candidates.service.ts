@@ -8,7 +8,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
-import { OrgContext } from '../common/org-context';
+import { OrgContext, can } from '../common/org-context';
 import { OrgEventsService } from '../common/org-events.service';
 import { OrgTokenService } from '../common/org-token.service';
 import { applicationScope, pageResult, paging, userSummaries } from '../common/org-helpers';
@@ -49,13 +49,18 @@ export class CandidatesService {
     return c;
   }
 
-  private async unlockedSet(ids: string[]): Promise<Set<string>> {
+  async unlockedSet(ids: string[]): Promise<Set<string>> {
     if (!ids.length) return new Set();
     const rows = await this.prisma.tokenTransaction.findMany({
       where: { idempotencyKey: { in: ids.map(unlockKey) } },
       select: { idempotencyKey: true },
     });
     return new Set(rows.map((r) => r.idempotencyKey.replace('resume:', '')));
+  }
+
+  async isUnlocked(ctx: OrgContext, id: string): Promise<boolean> {
+    const set = await this.unlockedSet([id]);
+    return set.has(id);
   }
 
   async list(ctx: OrgContext, q: CandidateQueryDto) {
@@ -108,24 +113,38 @@ export class CandidatesService {
 
   async get(ctx: OrgContext, id: string) {
     const c = await this.findInOrg(ctx, id);
-    const unlocked = (await this.unlockedSet([id])).has(id);
+    const unlocked = can(ctx, 'candidates.resume.view') && (await this.unlockedSet([id])).has(id);
     const [applications, notes, saved, messages] = await Promise.all([
       this.prisma.application.findMany({
         where: { AND: [applicationScope(ctx), { candidateId: id }] },
         include: { job: { select: { id: true, title: true, status: true } } },
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.candidateNote.findMany({ where: { organisationId: ctx.organisationId, candidateId: id }, orderBy: { createdAt: 'desc' } }),
-      this.prisma.savedCandidate.findUnique({ where: { userId_candidateId: { userId: ctx.userId, candidateId: id } } }),
+      this.prisma.candidateNote.findMany({
+        where: { organisationId: ctx.organisationId, candidateId: id },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.savedCandidate.findUnique({
+        where: { userId_candidateId: { userId: ctx.userId, candidateId: id } },
+      }),
       this.prisma.candidateMessage.count({ where: { organisationId: ctx.organisationId, candidateId: id } }),
     ]);
     const matchRuns = applications.length
       ? await this.prisma.aiRun.findMany({
-          where: { organisationId: ctx.organisationId, feature: 'AI_MATCH', status: 'SUCCEEDED', referenceId: { in: applications.map((a) => a.id) } },
+          where: {
+            organisationId: ctx.organisationId,
+            feature: 'AI_MATCH',
+            status: 'SUCCEEDED',
+            referenceId: { in: applications.map((a) => a.id) },
+          },
           orderBy: { createdAt: 'desc' },
         })
       : [];
-    const users = await userSummaries(this.prisma, ctx.organisationId, notes.map((n) => n.authorId));
+    const users = await userSummaries(
+      this.prisma,
+      ctx.organisationId,
+      notes.map((n) => n.authorId),
+    );
     const latestMatch = new Map<string, (typeof matchRuns)[number]>();
     matchRuns.forEach((r) => !latestMatch.has(r.referenceId) && latestMatch.set(r.referenceId, r));
 
@@ -144,7 +163,9 @@ export class CandidatesService {
       hasResume: !!(c.resumeText || c.resumeUrl),
       unlocked,
       unlockCost: TOKEN_COSTS.RESUME_VIEW,
-      contact: unlocked ? { email: c.email, phone: c.phone, resumeText: c.resumeText, resumeUrl: c.resumeUrl } : null,
+      contact: unlocked
+        ? { email: c.email, phone: c.phone, resumeText: c.resumeText, resumeUrl: c.resumeUrl }
+        : null,
       saved: !!saved,
       messageCount: messages,
       applications: applications.map((a) => ({
@@ -153,9 +174,21 @@ export class CandidatesService {
         matchScore: a.matchScore,
         job: a.job,
         createdAt: a.createdAt,
-        match: latestMatch.has(a.id) ? { score: a.matchScore, explanation: latestMatch.get(a.id).explanation, at: latestMatch.get(a.id).createdAt } : null,
+        match: latestMatch.has(a.id)
+          ? {
+              score: a.matchScore,
+              explanation: latestMatch.get(a.id).explanation,
+              at: latestMatch.get(a.id).createdAt,
+            }
+          : null,
       })),
-      notes: notes.map((n) => ({ id: n.id, body: n.body, applicationId: n.applicationId, author: users.get(n.authorId)?.name ?? 'Former member', createdAt: n.createdAt })),
+      notes: notes.map((n) => ({
+        id: n.id,
+        body: n.body,
+        applicationId: n.applicationId,
+        author: users.get(n.authorId)?.name ?? 'Former member',
+        createdAt: n.createdAt,
+      })),
     };
   }
 
@@ -163,10 +196,20 @@ export class CandidatesService {
     const c = await this.findInOrg(ctx, id);
     const result = await this.tokens.consume(
       { organisationId: ctx.organisationId, userId: ctx.userId, role: ctx.role },
-      { feature: 'RESUME_VIEW', amount: TOKEN_COSTS.RESUME_VIEW, idempotencyKey: unlockKey(id), referenceId: id, reason: `Unlocked ${c.firstName} ${c.lastName}` },
+      {
+        feature: 'RESUME_VIEW',
+        amount: TOKEN_COSTS.RESUME_VIEW,
+        idempotencyKey: unlockKey(id),
+        referenceId: id,
+        reason: `Unlocked ${c.firstName} ${c.lastName}`,
+      },
     );
     await this.events.audit(ctx, 'CANDIDATE_RESUME_VIEWED', 'CANDIDATE', id, { charged: result.charged });
-    return { unlocked: true, charged: result.charged, contact: { email: c.email, phone: c.phone, resumeText: c.resumeText, resumeUrl: c.resumeUrl } };
+    return {
+      unlocked: true,
+      charged: result.charged,
+      contact: { email: c.email, phone: c.phone, resumeText: c.resumeText, resumeUrl: c.resumeUrl },
+    };
   }
 
   async create(ctx: OrgContext, dto: CandidateInputDto) {
@@ -174,12 +217,22 @@ export class CandidatesService {
       where: { organisationId_email: { organisationId: ctx.organisationId, email: dto.email } },
       select: { id: true },
     });
-    if (exists) throw new ConflictException({ message: 'This candidate is already in your talent pool', details: { candidateId: exists.id } });
+    if (exists)
+      throw new ConflictException({
+        message: 'This candidate is already in your talent pool',
+        details: { candidateId: exists.id },
+      });
     const c = await this.prisma.candidate.create({
-      data: { ...dto, skills: cleanSkills(dto.skills) ?? [], organisationId: ctx.organisationId, createdById: ctx.userId },
+      data: {
+        ...dto,
+        skills: cleanSkills(dto.skills) ?? [],
+        organisationId: ctx.organisationId,
+        createdById: ctx.userId,
+      },
       select: PUBLIC_CANDIDATE_SELECT,
     });
     await this.events.audit(ctx, 'CANDIDATE_CREATED', 'CANDIDATE', c.id, { source: dto.source });
+    this.events.emit(ctx.organisationId, 'candidate.updated', { candidateId: c.id });
     return c;
   }
 
@@ -198,20 +251,55 @@ export class CandidatesService {
       select: PUBLIC_CANDIDATE_SELECT,
     });
     await this.events.audit(ctx, 'CANDIDATE_UPDATED', 'CANDIDATE', id, { fields: Object.keys(dto) });
+    this.events.emit(ctx.organisationId, 'candidate.updated', { candidateId: id });
     return c;
   }
 
   async addNote(ctx: OrgContext, id: string, body: string, applicationId?: string) {
     await this.findInOrg(ctx, id);
     if (applicationId) {
-      const app = await this.prisma.application.findFirst({ where: { id: applicationId, organisationId: ctx.organisationId, candidateId: id } });
+      const app = await this.prisma.application.findFirst({
+        where: { id: applicationId, organisationId: ctx.organisationId, candidateId: id },
+      });
       if (!app) throw new NotFoundException('Application not found');
     }
     const note = await this.prisma.candidateNote.create({
-      data: { organisationId: ctx.organisationId, candidateId: id, applicationId, authorId: ctx.userId, body: body.trim() },
+      data: {
+        organisationId: ctx.organisationId,
+        candidateId: id,
+        applicationId,
+        authorId: ctx.userId,
+        body: body.trim(),
+      },
     });
     await this.events.audit(ctx, 'CANDIDATE_NOTE_ADDED', 'CANDIDATE', id, { noteId: note.id });
-    return { id: note.id, body: note.body, applicationId: note.applicationId, author: `${ctx.firstName} ${ctx.lastName}`, createdAt: note.createdAt };
+    return {
+      id: note.id,
+      body: note.body,
+      applicationId: note.applicationId,
+      author: `${ctx.firstName} ${ctx.lastName}`,
+      createdAt: note.createdAt,
+    };
+  }
+
+  async getNotes(ctx: OrgContext, id: string) {
+    await this.findInOrg(ctx, id);
+    const notes = await this.prisma.candidateNote.findMany({
+      where: { organisationId: ctx.organisationId, candidateId: id },
+      orderBy: { createdAt: 'desc' },
+    });
+    const users = await userSummaries(
+      this.prisma,
+      ctx.organisationId,
+      notes.map((n) => n.authorId),
+    );
+    return notes.map((n) => ({
+      id: n.id,
+      body: n.body,
+      applicationId: n.applicationId,
+      author: users.get(n.authorId)?.name ?? 'Former member',
+      createdAt: n.createdAt,
+    }));
   }
 
   async setSaved(ctx: OrgContext, id: string, saved: boolean) {

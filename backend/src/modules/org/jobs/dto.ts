@@ -137,6 +137,14 @@ export class JobQueryDto extends PageQueryDto {
   @IsOptional()
   @IsIn(['mine', 'approvals'])
   view?: 'mine' | 'approvals';
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
 }
 
 export class JobActionDto {

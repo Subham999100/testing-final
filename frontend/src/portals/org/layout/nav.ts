@@ -23,10 +23,16 @@ import {
   Users,
   UserSearch,
   LifeBuoy,
+  Folder,
 } from 'lucide-react';
 
 /** Lazy page chunks — shared by React.lazy and sidebar hover prefetch. */
 export const loaders = {
+  folders: () => import('../recruiter/FoldersPage'),
+  reports: () => import('../recruiter/ReportsPage'),
+  recruitmentActions: () => import('../recruiter/ApplicationActionPage'),
+  recruiterDashboard: () => import('../pages/dashboard-recruiter'),
+  recruiterCandidates: () => import('../recruiter/pages'),
   dashboard: () => import('../pages/dashboard'),
   team: () => import('../pages/team'),
   jobs: () => import('../pages/jobs'),
@@ -105,6 +111,8 @@ export const NAV: NavSection[] = [
   {
     title: 'Hiring',
     items: [
+      { label: 'Folders', path: '/org/folders', icon: Folder, chunk: 'folders', perms: ['candidates.save'] },
+      { label: 'Reports', path: '/org/reports', icon: BarChart3, chunk: 'reports', perms: ['analytics.self', 'analytics.recruiter', 'analytics.org'] },
       { label: 'Dashboard', path: '/org', icon: LayoutDashboard, chunk: 'dashboard' },
       { label: 'Jobs', path: '/org/jobs', icon: Briefcase, perms: ['jobs.read.all', 'jobs.read.assigned'], chunk: 'jobs' },
       { label: 'Candidates', path: '/org/candidates', icon: UserSearch, perms: ['candidates.read', 'candidates.search'], chunk: 'candidates' },

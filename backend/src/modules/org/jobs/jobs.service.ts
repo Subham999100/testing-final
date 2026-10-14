@@ -89,6 +89,29 @@ export class JobsService {
         ],
       });
     }
+    if (q.startDate || q.endDate) {
+      let start: Date | undefined;
+      let endExclusive: Date | undefined;
+
+      if (q.startDate) {
+        start = new Date(`${q.startDate}T00:00:00.000Z`);
+        if (isNaN(start.getTime())) throw new BadRequestException('Invalid start date');
+      }
+      if (q.endDate) {
+        const parsedEnd = new Date(`${q.endDate}T00:00:00.000Z`);
+        if (isNaN(parsedEnd.getTime())) throw new BadRequestException('Invalid end date');
+        endExclusive = new Date(parsedEnd.getTime() + 86400000);
+      }
+      if (start && endExclusive && start >= endExclusive) {
+        throw new BadRequestException('Start date cannot be after end date');
+      }
+      and.push({
+        createdAt: {
+          ...(start ? { gte: start } : {}),
+          ...(endExclusive ? { lt: endExclusive } : {}),
+        },
+      });
+    }
     const where = { AND: and };
     const [total, jobs] = await Promise.all([
       this.prisma.job.count({ where }),

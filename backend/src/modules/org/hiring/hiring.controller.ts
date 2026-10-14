@@ -71,6 +71,12 @@ export class OrgCandidatesController {
     return this.candidates.unlock(ctx, id);
   }
 
+  @Get(':id/notes')
+  @OrgPerms('candidates.read')
+  getNotes(@Org() ctx: OrgContext, @Param('id') id: string) {
+    return this.candidates.getNotes(ctx, id);
+  }
+
   @Post(':id/notes')
   @OrgPerms('candidates.notes.write')
   addNote(@Org() ctx: OrgContext, @Param('id') id: string, @Body() dto: NoteDto) {
