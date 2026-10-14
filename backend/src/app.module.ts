@@ -11,6 +11,8 @@ import { IntegrationsModule } from './integrations/integrations.module';
 import { PlatformModule } from './modules/platform/platform.module';
 import { OrgModule } from './modules/org/org.module';
 import { PublicModule } from './modules/public/public.module';
+import { CandidateModule } from './modules/candidate/candidate.module';
+import { VideoProfileModule } from './modules/candidate/video-profile/video-profile.module';
 
 @Module({
   imports: [
@@ -24,6 +26,8 @@ import { PublicModule } from './modules/public/public.module';
     PlatformModule,
     OrgModule,
     PublicModule,
+    CandidateModule,
+    VideoProfileModule,
   ],
 })
 export class AppModule {}

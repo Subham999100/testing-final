@@ -28,15 +28,243 @@ import {
   X,
   Sparkles,
   ChevronDown,
-  Bot
+  Bot,
+  Globe,
+  Unlock,
+  Download,
+  Phone,
+  MapPin,
+  Briefcase,
+  Lock,
 } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { usePermissions } from "../lib/session";
 import { toast } from "../ui/toast";
 import { Sheet } from "../ui/ui";
-import { Folder, SavedSearch, TalentCard, root, talentKeys } from "./types";
+import {
+  Folder,
+  SavedSearch,
+  TalentCard,
+  MaskedGlobalCandidate,
+  GlobalSearchResponse,
+  root,
+  talentKeys,
+} from "./types";
 import { ProfileCard, QueryError } from "./display";
 import "./recruiter.css";
+
+function GlobalCandidateCard({
+  candidate: c,
+  onUnlock,
+  isUnlocking,
+}: {
+  candidate: MaskedGlobalCandidate;
+  onUnlock: (userId: string) => void;
+  isUnlocking: boolean;
+}) {
+  const fullName = `${c.firstName} ${c.lastName}`.trim();
+  const initials = `${c.firstName?.[0] || ""}${c.lastName?.[0] || ""}`;
+
+  return (
+    <article className="r-card r-candidate r-foundit-card" style={{ marginBottom: 16 }}>
+      <div className="r-foundit-layout">
+        <div className="r-foundit-left">
+          <div className="r-foundit-header">
+            <div className="r-foundit-avatar" aria-hidden="true">
+              {initials || "U"}
+            </div>
+            <div className="r-foundit-identity">
+              <div
+                className="r-foundit-name-row"
+                style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
+              >
+                <h2 className="r-foundit-name">
+                  {c.isUnlocked && c.candidateId ? (
+                    <Link to={`/org/candidates/${c.candidateId}`} className="r-foundit-name-link">
+                      {fullName}
+                    </Link>
+                  ) : (
+                    fullName
+                  )}
+                </h2>
+                {c.isInPool && (
+                  <span
+                    style={{
+                      background: "#e0f2fe",
+                      color: "#0369a1",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Already in your pool
+                  </span>
+                )}
+                {c.isUnlocked ? (
+                  <span
+                    style={{
+                      background: "#dcfce7",
+                      color: "#15803d",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Unlocked
+                  </span>
+                ) : (
+                  <span
+                    style={{
+                      background: "#fef3c7",
+                      color: "#b45309",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Masked Profile
+                  </span>
+                )}
+              </div>
+              <div className="r-foundit-stats">
+                <span>
+                  <Briefcase size={14} className="r-stat-icon" />
+                  {c.experienceYears != null ? `${c.experienceYears} Years Exp` : "Exp not specified"}
+                </span>
+                {c.currentCompany && (
+                  <span>
+                    Current: <strong>{c.currentCompany}</strong>
+                  </span>
+                )}
+                {c.location && (
+                  <span>
+                    <MapPin size={14} className="r-stat-icon" />
+                    {c.location}
+                  </span>
+                )}
+              </div>
+              {c.headline && (
+                <p style={{ margin: "4px 0 0", color: "var(--r-text)", fontWeight: 500 }}>
+                  {c.headline}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <dl className="r-foundit-meta-dl">
+            {c.skills && c.skills.length > 0 && (
+              <>
+                <dt>Skills:</dt>
+                <dd className="r-foundit-skills-wrap">
+                  {c.skills.slice(0, 10).map((skill, i) => (
+                    <span key={i} className="r-skill-tag">
+                      {skill}
+                    </span>
+                  ))}
+                  {c.skills.length > 10 && (
+                    <span className="r-skill-tag" style={{ color: "var(--r-muted)" }}>
+                      +{c.skills.length - 10} more
+                    </span>
+                  )}
+                </dd>
+              </>
+            )}
+
+            {c.bio && (
+              <>
+                <dt>Summary:</dt>
+                <dd style={{ color: "var(--r-muted)", fontSize: "13px" }}>
+                  {c.bio.length > 200 ? `${c.bio.slice(0, 200)}...` : c.bio}
+                </dd>
+              </>
+            )}
+          </dl>
+        </div>
+
+        <div className="r-foundit-right">
+          <div className="r-foundit-contact-block" style={{ marginTop: 8 }}>
+            <div className="r-contact-phone-row">
+              <div className="r-phone-bubble" aria-hidden="true">
+                <Phone size={13} />
+              </div>
+              <span className="r-phone-masked">
+                {c.isUnlocked && c.phone ? c.phone : "+91 ••••• •••••"}
+              </span>
+            </div>
+
+            <div className="r-contact-phone-row" style={{ marginTop: 4 }}>
+              <div className="r-phone-bubble" aria-hidden="true">
+                <Mail size={13} />
+              </div>
+              <span className="r-phone-masked">
+                {c.isUnlocked && c.email ? c.email : "•••••••@••••••.com"}
+              </span>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              {c.isUnlocked ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {c.resumeUrl && c.candidateId && (
+                    <a
+                      href={`/api/v1/org/recruiter/candidates/${c.candidateId}/resume/download`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="r-button"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        justifyContent: "center",
+                        padding: "6px 12px",
+                        fontSize: "12px",
+                      }}
+                    >
+                      <Download size={13} />
+                      Download Resume
+                    </a>
+                  )}
+                  {c.candidateId && (
+                    <Link
+                      to={`/org/candidates/${c.candidateId}`}
+                      className="r-link"
+                      style={{ fontSize: "12px", textAlign: "center" }}
+                    >
+                      Open in ATS Workspace →
+                    </Link>
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="r-primary-btn"
+                  disabled={isUnlocking}
+                  onClick={() => onUnlock(c.userId)}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    padding: "8px 14px",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                  }}
+                >
+                  <Unlock size={14} />
+                  {isUnlocking ? "Unlocking..." : "Unlock (2 Tokens)"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 const allowed = searchFields;
 const numbers = new Set([
   "activityDays",
@@ -194,10 +422,49 @@ export function SearchPage() {
       setRecent([]);
     }
   }, [me?.user.id]);
+  const [searchScope, setSearchScope] = useState<"my" | "global">("my");
+
   const result = useQuery({
     queryKey: [...talentKeys, "search", filters],
     queryFn: () => api.page<TalentCard>(`${root}/candidates`, filters),
+    enabled: searchScope === "my",
     staleTime: 15000,
+  });
+
+  const globalResult = useQuery({
+    queryKey: [...talentKeys, "global-search", filters],
+    queryFn: () =>
+      api.post<GlobalSearchResponse>(`${root}/global-search`, {
+        keyword: filters.search?.trim() || undefined,
+        skills: filters.keywords
+          ? filters.keywords.split(",").map((s) => s.trim()).filter(Boolean)
+          : undefined,
+        minExperience: filters.minExperience ? Number(filters.minExperience) : undefined,
+        maxExperience: filters.maxExperience ? Number(filters.maxExperience) : undefined,
+        location: filters.location?.trim() || undefined,
+        page: Number(filters.page || 1),
+        limit: Math.min(Number(filters.limit || 20), 25),
+      }),
+    enabled: searchScope === "global" && can("candidates.search"),
+    staleTime: 15000,
+  });
+
+  const unlockMutation = useMutation({
+    mutationFn: (userId: string) =>
+      api.post<{ unlocked: boolean; charged: boolean; candidate: any }>(
+        `${root}/global-candidates/${userId}/unlock`,
+        {},
+      ),
+    onSuccess: (res) => {
+      toast.success(
+        res.charged
+          ? "Candidate unlocked successfully! 2 tokens charged."
+          : "Candidate unlocked (free applicant access).",
+      );
+      void qc.invalidateQueries({ queryKey: [...talentKeys, "global-search"] });
+      void qc.invalidateQueries({ queryKey: talentKeys });
+    },
+    onError: (e) => toast.error(errorMessage(e)),
   });
   const run = params.get("run");
   useEffect(() => {
@@ -1198,241 +1465,377 @@ export function SearchPage() {
               </button>
             </aside>
           <section className="r-results" aria-label="Candidate search results">
-            <div className="r-row r-toolbar">
-              <strong aria-live="polite">
-                {result.isPending
-                  ? "Searching…"
-                  : `${meta?.total ?? 0} profiles`}
-              </strong>
-              <div className="r-row">
-                <label>
-                  Sort{" "}
-                  <select
-                    aria-label="Sort profiles"
-                    value={filters.sort ?? "relevance"}
-                    onChange={(e) => update("sort", e.target.value)}
-                  >
-                    <option value="relevance">Relevance</option>
-                    <option value="updated">Last updated</option>
-                    <option value="experience">Experience</option>
-                    <option value="active">Last active</option>
-                  </select>
-                </label>
-                <label>
-                  Show{" "}
-                  <select
-                    aria-label="Profiles per page"
-                    value={filters.limit ?? "20"}
-                    onChange={(e) => update("limit", e.target.value)}
-                  >
-                    <option>20</option>
-                    <option>40</option>
-                    <option>50</option>
-                  </select>
-                </label>
-              </div>
-            </div>
+            {/* Search Scope Toggle */}
             <div
-              className="r-tabs r-source-tabs"
+              className="r-tabs"
               role="tablist"
-              aria-label="Candidate origin"
+              aria-label="Search scope"
+              style={{
+                display: "flex",
+                gap: 12,
+                marginBottom: 16,
+                borderBottom: "2px solid var(--r-border)",
+                paddingBottom: 8,
+              }}
             >
-              {[
-                ["", "All candidates"],
-                ["registered", "Registered candidates"],
-                ["sourced", "Sourced candidates"],
-              ].map(([key, label]) => (
-                <button
-                  type="button"
-                  role="tab"
-                  key={key}
-                  aria-selected={(filters.sourceGroup || "") === key}
-                  className={
-                    (filters.sourceGroup || "") === key ? "active" : ""
-                  }
-                  onClick={() => update("sourceGroup", key)}
-                >
-                  {label}
-                </button>
-              ))}
+              <button
+                type="button"
+                role="tab"
+                aria-selected={searchScope === "my"}
+                className={searchScope === "my" ? "active" : ""}
+                onClick={() => setSearchScope("my")}
+                style={{
+                  padding: "8px 18px",
+                  fontWeight: 600,
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                }}
+              >
+                My candidates
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={searchScope === "global"}
+                className={searchScope === "global" ? "active" : ""}
+                onClick={() => setSearchScope("global")}
+                style={{
+                  padding: "8px 18px",
+                  fontWeight: 600,
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Globe size={16} />
+                Global talent pool
+              </button>
             </div>
-            <p className="r-help">
-              {meta?.total ?? 0} matching profiles in this view. Profiles with
-              an unclassified source appear under All candidates.
-            </p>
-            <div className="r-row r-bulk">
-              <label className="r-check">
-                <input
-                  type="checkbox"
-                  checked={
-                    !!rows.length && rows.every((c) => selected.includes(c.id))
-                  }
-                  disabled={!rows.length}
-                  onChange={(e) =>
-                    setSelected((ids) =>
-                      e.target.checked
-                        ? [
-                            ...new Set([...ids, ...rows.map((c) => c.id)]),
-                          ].slice(0, 1000)
-                        : ids.filter((id) => !rows.some((c) => c.id === id)),
-                    )
-                  }
-                />
-                Select page · {selected.length} selected
-              </label>
-              {can("candidates.save") && (
-                <button
-                  type="button"
-                  className="r-link"
-                  disabled={!selected.length}
-                  onClick={() => setFolderPicker(true)}
-                >
-                  <FolderPlus size={16} />
-                  Add to folder
-                </button>
-              )}
-              {can("messages.use") &&
-                can("candidates.read") &&
-                can("candidates.resume.view") && (
-                  <button
-                    type="button"
-                    className="r-link"
-                    disabled={!selected.length}
-                    onClick={() => {
-                      setEmailTargets(selected);
-                      setEmailOpen(true);
-                    }}
-                  >
-                    <Mail size={16} />
-                    Email
-                  </button>
+
+            {searchScope === "global" ? (
+              <>
+                <div className="r-row r-toolbar">
+                  <strong aria-live="polite">
+                    {globalResult.isPending
+                      ? "Searching global talent pool…"
+                      : `${globalResult.data?.total ?? 0} profiles in Global Talent Pool`}
+                  </strong>
+                  <div className="r-row">
+                    <label>
+                      Show{" "}
+                      <select
+                        aria-label="Profiles per page"
+                        value={filters.limit ?? "20"}
+                        onChange={(e) => update("limit", e.target.value)}
+                      >
+                        <option>10</option>
+                        <option>20</option>
+                        <option>25</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+
+                <p className="r-help">
+                  Showing opted-in candidates discoverable across the network. Masked profiles can be unlocked for 2 tokens (free for candidates who applied to your organisation).
+                </p>
+
+                {globalResult.isError ? (
+                  <QueryError
+                    error={globalResult.error}
+                    retry={() => void globalResult.refetch()}
+                  />
+                ) : globalResult.isPending ? (
+                  <div className="r-card" role="status">
+                    Searching global talent pool…
+                  </div>
+                ) : globalResult.data?.items?.length ? (
+                  globalResult.data.items.map((c) => (
+                    <GlobalCandidateCard
+                      key={c.userId}
+                      candidate={c}
+                      onUnlock={(uid) => unlockMutation.mutate(uid)}
+                      isUnlocking={unlockMutation.isPending}
+                    />
+                  ))
+                ) : (
+                  <div className="r-card r-empty">
+                    <Search size={32} />
+                    <h2>No matching profiles in Global Talent Pool</h2>
+                    <p>Try fewer keywords, adjusting experience, or clearing filters.</p>
+                  </div>
                 )}
-              {can("messages.use") && (
-                <button
-                  type="button"
-                  className="r-link"
-                  disabled={!selected.length}
-                  onClick={() => {
-                    setWhatsAppTargets(selected);
-                    setWhatsAppOpen(true);
-                  }}
-                >
-                  <MessageCircle size={16} />
-                  WhatsApp
-                </button>
-              )}
-              {can("messages.use") && (
-                <button
-                  type="button"
-                  className="r-link"
-                  disabled={!selected.length}
-                  onClick={() => {
-                    setSmsTargets(selected);
-                    setSmsOpen(true);
-                  }}
-                >
-                  <Smartphone size={16} />
-                  SMS
-                </button>
-              )}
-              {filters.folderId && can("candidates.save") && (
-                <button
-                  type="button"
-                  className="r-link"
-                  disabled={!selected.length || remove.isPending}
-                  onClick={() => remove.mutate()}
-                >
-                  Remove from folder
-                </button>
-              )}
-              {can("candidates.search") && (
-                <button
-                  type="button"
-                  className="r-link"
-                  onClick={() => setSaveOpen(true)}
-                >
-                  <Bookmark size={16} />
-                  Save search
-                </button>
-              )}
-            </div>
-            {result.isError ? (
-              <QueryError
-                error={result.error}
-                retry={() => void result.refetch()}
-              />
-            ) : result.isPending ? (
-              <div className="r-card" role="status">
-                Loading candidates…
-              </div>
-            ) : rows.length ? (
-              rows.map((c) => (
-                <ProfileCard
-                  key={c.id}
-                  candidate={c}
-                  query={filters.search}
-                  selected={selected.includes(c.id)}
-                  onSelect={toggle}
-                  onEmail={
-                    can("messages.use") &&
-                    can("candidates.read") &&
-                    can("candidates.resume.view")
-                      ? (id) => {
-                          setEmailTargets([id]);
-                          setEmailOpen(true);
-                        }
-                      : undefined
-                  }
-                  onWhatsApp={
-                    can("messages.use")
-                      ? (id) => {
-                          setWhatsAppTargets([id]);
-                          setWhatsAppOpen(true);
-                        }
-                      : undefined
-                  }
-                  onSms={
-                    can("messages.use")
-                      ? (id) => {
-                          setSmsTargets([id]);
-                          setSmsOpen(true);
-                        }
-                      : undefined
-                  }
-                  onComment={(candidate) => {
-                    setCommentCandidate(candidate);
-                  }}
-                />
-              ))
+
+                {globalResult.data && globalResult.data.totalPages > 1 && (
+                  <div className="r-row r-pagination">
+                    <button
+                      type="button"
+                      className="r-button"
+                      disabled={globalResult.data.page <= 1 || globalResult.isFetching}
+                      onClick={() => update("page", String(globalResult.data.page - 1))}
+                    >
+                      Previous
+                    </button>
+                    <span>
+                      Page {globalResult.data.page} of {globalResult.data.totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      className="r-button"
+                      disabled={
+                        globalResult.data.page >= globalResult.data.totalPages ||
+                        globalResult.isFetching
+                      }
+                      onClick={() => update("page", String(globalResult.data.page + 1))}
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
-              <div className="r-card r-empty">
-                <Search size={32} />
-                <h2>No matching profiles</h2>
-                <p>Try fewer keywords or clear a filter.</p>
-              </div>
-            )}
-            {meta && (
-              <div className="r-row r-pagination">
-                <button
-                  type="button"
-                  className="r-button"
-                  disabled={meta.page <= 1 || result.isFetching}
-                  onClick={() => update("page", String(meta.page - 1))}
+              <>
+                <div className="r-row r-toolbar">
+                  <strong aria-live="polite">
+                    {result.isPending
+                      ? "Searching…"
+                      : `${meta?.total ?? 0} profiles`}
+                  </strong>
+                  <div className="r-row">
+                    <label>
+                      Sort{" "}
+                      <select
+                        aria-label="Sort profiles"
+                        value={filters.sort ?? "relevance"}
+                        onChange={(e) => update("sort", e.target.value)}
+                      >
+                        <option value="relevance">Relevance</option>
+                        <option value="updated">Last updated</option>
+                        <option value="experience">Experience</option>
+                        <option value="active">Last active</option>
+                      </select>
+                    </label>
+                    <label>
+                      Show{" "}
+                      <select
+                        aria-label="Profiles per page"
+                        value={filters.limit ?? "20"}
+                        onChange={(e) => update("limit", e.target.value)}
+                      >
+                        <option>20</option>
+                        <option>40</option>
+                        <option>50</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+                <div
+                  className="r-tabs r-source-tabs"
+                  role="tablist"
+                  aria-label="Candidate origin"
                 >
-                  Previous
-                </button>
-                <span>
-                  Page {meta.page} of {meta.totalPages}
-                </span>
-                <button
-                  type="button"
-                  className="r-button"
-                  disabled={meta.page >= meta.totalPages || result.isFetching}
-                  onClick={() => update("page", String(meta.page + 1))}
-                >
-                  Next
-                </button>
-              </div>
+                  {[
+                    ["", "All candidates"],
+                    ["registered", "Registered candidates"],
+                    ["sourced", "Sourced candidates"],
+                  ].map(([key, label]) => (
+                    <button
+                      type="button"
+                      role="tab"
+                      key={key}
+                      aria-selected={(filters.sourceGroup || "") === key}
+                      className={
+                        (filters.sourceGroup || "") === key ? "active" : ""
+                      }
+                      onClick={() => update("sourceGroup", key)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p className="r-help">
+                  {meta?.total ?? 0} matching profiles in this view. Profiles with
+                  an unclassified source appear under All candidates.
+                </p>
+                <div className="r-row r-bulk">
+                  <label className="r-check">
+                    <input
+                      type="checkbox"
+                      checked={
+                        !!rows.length && rows.every((c) => selected.includes(c.id))
+                      }
+                      disabled={!rows.length}
+                      onChange={(e) =>
+                        setSelected((ids) =>
+                          e.target.checked
+                            ? [
+                                ...new Set([...ids, ...rows.map((c) => c.id)]),
+                              ].slice(0, 1000)
+                            : ids.filter((id) => !rows.some((c) => c.id === id)),
+                        )
+                      }
+                    />
+                    Select page · {selected.length} selected
+                  </label>
+                  {can("candidates.save") && (
+                    <button
+                      type="button"
+                      className="r-link"
+                      disabled={!selected.length}
+                      onClick={() => setFolderPicker(true)}
+                    >
+                      <FolderPlus size={16} />
+                      Add to folder
+                    </button>
+                  )}
+                  {can("messages.use") &&
+                    can("candidates.read") &&
+                    can("candidates.resume.view") && (
+                      <button
+                        type="button"
+                        className="r-link"
+                        disabled={!selected.length}
+                        onClick={() => {
+                          setEmailTargets(selected);
+                          setEmailOpen(true);
+                        }}
+                      >
+                        <Mail size={16} />
+                        Email
+                      </button>
+                    )}
+                  {can("messages.use") && (
+                    <button
+                      type="button"
+                      className="r-link"
+                      disabled={!selected.length}
+                      onClick={() => {
+                        setWhatsAppTargets(selected);
+                        setWhatsAppOpen(true);
+                      }}
+                    >
+                      <MessageCircle size={16} />
+                      WhatsApp
+                    </button>
+                  )}
+                  {can("messages.use") && (
+                    <button
+                      type="button"
+                      className="r-link"
+                      disabled={!selected.length}
+                      onClick={() => {
+                        setSmsTargets(selected);
+                        setSmsOpen(true);
+                      }}
+                    >
+                      <Smartphone size={16} />
+                      SMS
+                    </button>
+                  )}
+                  {filters.folderId && can("candidates.save") && (
+                    <button
+                      type="button"
+                      className="r-link"
+                      disabled={!selected.length || remove.isPending}
+                      onClick={() => remove.mutate()}
+                    >
+                      Remove from folder
+                    </button>
+                  )}
+                  {can("candidates.search") && (
+                    <button
+                      type="button"
+                      className="r-link"
+                      onClick={() => setSaveOpen(true)}
+                    >
+                      <Bookmark size={16} />
+                      Save search
+                    </button>
+                  )}
+                </div>
+                {result.isError ? (
+                  <QueryError
+                    error={result.error}
+                    retry={() => void result.refetch()}
+                  />
+                ) : result.isPending ? (
+                  <div className="r-card" role="status">
+                    Loading candidates…
+                  </div>
+                ) : rows.length ? (
+                  rows.map((c) => (
+                    <ProfileCard
+                      key={c.id}
+                      candidate={c}
+                      query={filters.search}
+                      selected={selected.includes(c.id)}
+                      onSelect={toggle}
+                      onEmail={
+                        can("messages.use") &&
+                        can("candidates.read") &&
+                        can("candidates.resume.view")
+                          ? (id) => {
+                              setEmailTargets([id]);
+                              setEmailOpen(true);
+                            }
+                          : undefined
+                      }
+                      onWhatsApp={
+                        can("messages.use")
+                          ? (id) => {
+                              setWhatsAppTargets([id]);
+                              setWhatsAppOpen(true);
+                            }
+                          : undefined
+                      }
+                      onSms={
+                        can("messages.use")
+                          ? (id) => {
+                              setSmsTargets([id]);
+                              setSmsOpen(true);
+                            }
+                          : undefined
+                      }
+                      onComment={(candidate) => {
+                        setCommentCandidate(candidate);
+                      }}
+                    />
+                  ))
+                ) : (
+                  <div className="r-card r-empty">
+                    <Search size={32} />
+                    <h2>No matching profiles</h2>
+                    <p>Try fewer keywords or clear a filter.</p>
+                  </div>
+                )}
+                {meta && (
+                  <div className="r-row r-pagination">
+                    <button
+                      type="button"
+                      className="r-button"
+                      disabled={meta.page <= 1 || result.isFetching}
+                      onClick={() => update("page", String(meta.page - 1))}
+                    >
+                      Previous
+                    </button>
+                    <span>
+                      Page {meta.page} of {meta.totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      className="r-button"
+                      disabled={meta.page >= meta.totalPages || result.isFetching}
+                      onClick={() => update("page", String(meta.page + 1))}
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </section>
         </div>

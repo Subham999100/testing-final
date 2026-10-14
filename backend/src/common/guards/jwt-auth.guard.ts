@@ -26,15 +26,22 @@ export class JwtAuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-    const authHeader = request.headers['authorization'] || request.headers['Authorization'];
+    let token: string | undefined;
 
-    if (!authHeader || typeof authHeader !== 'string') {
-      throw new UnauthorizedException('Authentication token is missing');
+    const authHeader = request.headers['authorization'] || request.headers['Authorization'];
+    if (authHeader && typeof authHeader === 'string') {
+      const [bearer, headerToken] = authHeader.split(' ');
+      if (bearer === 'Bearer' && headerToken) {
+        token = headerToken;
+      }
     }
 
-    const [bearer, token] = authHeader.split(' ');
-    if (bearer !== 'Bearer' || !token) {
-      throw new UnauthorizedException('Invalid authorization token format');
+    if (!token && request.query?.token) {
+      token = String(request.query.token);
+    }
+
+    if (!token) {
+      throw new UnauthorizedException('Authentication token is missing');
     }
 
     try {

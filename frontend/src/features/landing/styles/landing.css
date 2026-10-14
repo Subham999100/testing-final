@@ -1,0 +1,92 @@
+/* ============================================================
+   Clyptus Landing Page - Scoped Theme & Tokens (.landing-root)
+   Warm Editorial Identity: Burnt Orange, Cream/Linen Canvas,
+   Fraunces Headings, DM Sans Body.
+   ============================================================ */
+
+.landing-root {
+  --landing-primary: #E8630A;
+  --landing-primary-hover: #D05300;
+  --landing-primary-light: #FDF3EB;
+  --landing-canvas: #FAF7F2;
+  --landing-surface: #FFFDF9;
+  --landing-surface-alt: #F4EFEA;
+  --landing-ink: #171614;
+  --landing-ink-light: #3D352E;
+  --landing-muted: #62564E;
+  --landing-border: #E5D9CF;
+  --landing-border-light: #EFE8E1;
+  --landing-peach: #FCEFE6;
+  --landing-amber: #D97706;
+  --landing-forest: #1d7d4d;
+  --landing-forest-bg: #EAF7EE;
+
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--landing-canvas);
+  color: var(--landing-ink);
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Headings use Fraunces */
+.landing-root .font-editorial {
+  font-family: 'Fraunces', Georgia, serif;
+  font-feature-settings: 'opsz' 32, 'wght' 700;
+}
+
+/* Custom scrollbars inside carousels & drawers */
+.landing-root .custom-scrollbar::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.landing-root .custom-scrollbar::-webkit-scrollbar-track {
+  background: #F4EFEA;
+  border-radius: 9999px;
+}
+.landing-root .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #D7C7B8;
+  border-radius: 9999px;
+}
+.landing-root .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #BAA694;
+}
+
+/* Pulse animation for map pins */
+@keyframes landing-pin-pulse {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.2;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+}
+
+.landing-root .animate-pin-pulse {
+  animation: landing-pin-pulse 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Accessible focus ring */
+.landing-root a:focus-visible,
+.landing-root button:focus-visible,
+.landing-root input:focus-visible,
+.landing-root select:focus-visible {
+  outline: 2px solid var(--landing-primary);
+  outline-offset: 2px;
+}
+
+/* Prefers reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .landing-root * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

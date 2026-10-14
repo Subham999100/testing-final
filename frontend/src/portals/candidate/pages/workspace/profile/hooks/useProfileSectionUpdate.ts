@@ -1,0 +1,85 @@
+// ============================================================
+// Clyptus Job Portal - Candidate Portal (Design B)
+// Hook: useProfileSectionUpdate
+// Handles per-section PATCH /candidate/profile with optimistic updates,
+// cache rollback on failure, and server score recalculation
+// ============================================================
+
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { candidateApi } from '../../../../lib/api';
+import { candidateQueryKeys } from '../../../../lib/queryKeys';
+import { CandidateFullProfile, UpdateCandidateProfileRequest } from '../../../../lib/types';
+import { toast } from '@/portals/org/ui/toast';
+
+export function useProfileSectionUpdate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: Partial<UpdateCandidateProfileRequest>) => {
+      console.log(
+        '[useProfileSectionUpdate] 1. REQUEST payload sent to PATCH /candidate/profile:',
+        JSON.stringify(payload, null, 2),
+      );
+      const res = await candidateApi.updateProfile<CandidateFullProfile>(payload);
+      console.log(
+        '[useProfileSectionUpdate] 1. API Response received from server:',
+        res,
+      );
+      return res;
+    },
+    onMutate: async (newSectionData) => {
+      // Cancel outgoing refetches so they don't overwrite optimistic update
+      await queryClient.cancelQueries({ queryKey: candidateQueryKeys.profile });
+
+      // Snapshot previous profile
+      const previousProfile = queryClient.getQueryData<CandidateFullProfile>(
+        candidateQueryKeys.profile,
+      );
+
+      console.log(
+        '[useProfileSectionUpdate] 6. FRONTEND CACHE: Optimistic update applying:',
+        newSectionData,
+      );
+
+      // Optimistically update profile in cache
+      if (previousProfile) {
+        queryClient.setQueryData<CandidateFullProfile>(candidateQueryKeys.profile, {
+          ...previousProfile,
+          ...newSectionData,
+        });
+      }
+
+      return { previousProfile };
+    },
+    onError: (err: any, _variables, context) => {
+      console.error('[useProfileSectionUpdate] Error during mutation, rolling back:', err);
+      // Rollback to previous state
+      if (context?.previousProfile) {
+        queryClient.setQueryData(candidateQueryKeys.profile, context.previousProfile);
+      }
+      toast.error(err?.message || 'Failed to update section. Please try again.');
+    },
+    onSuccess: (updatedProfile) => {
+      console.log(
+        '[useProfileSectionUpdate] 6. FRONTEND CACHE: Server update succeeded, setting query cache with returned profile:',
+        {
+          projects: updatedProfile?.projects,
+          certifications: updatedProfile?.certifications,
+          languages: updatedProfile?.languages,
+          completionScore: updatedProfile?.completionScore,
+        },
+      );
+      // Set the returned full profile with fresh server score
+      if (updatedProfile) {
+        queryClient.setQueryData(candidateQueryKeys.profile, updatedProfile);
+      }
+      toast.success('Section updated successfully');
+    },
+    onSettled: () => {
+      console.log('[useProfileSectionUpdate] onSettled: Invalidating queries for fresh synchronization');
+      // Ensure server data and scoring breakdown are synchronized
+      void queryClient.invalidateQueries({ queryKey: candidateQueryKeys.profile });
+      void queryClient.invalidateQueries({ queryKey: candidateQueryKeys.me });
+    },
+  });
+}

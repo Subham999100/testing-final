@@ -36,6 +36,8 @@ import { OrganisationApplicationPage } from '../pages/public/OrganisationApplica
 
 // Organisation portal (Org Super Admin · Org Admin · Recruiter) — lazy-loaded, lives under /org/*
 const OrgPortal = React.lazy(() => import('../portals/org/OrgPortal'));
+// Candidate portal (Public discovery, candidate auth, and candidate workspace) — lazy-loaded
+const CandidatePortal = React.lazy(() => import('../portals/candidate/CandidatePortal'));
 
 export const AppRoutes: React.FC = () => (
   <Routes>
@@ -44,7 +46,6 @@ export const AppRoutes: React.FC = () => (
     <Route path="/apply/status" element={<OrganisationApplicationPage />} />
     <Route path="/organisation/apply" element={<Navigate to="/apply" replace />} />
     <Route path="/organisation-invitation" element={<OrganisationInvitation />} />
-    <Route path="/" element={<PlatformPortalSelection />} />
     <Route path="/platform/login" element={<PlatformPortalSelection />} />
 
     {/* Separate, Distinct Role-Specific Login Routes */}
@@ -212,6 +213,7 @@ export const AppRoutes: React.FC = () => (
     {/* ORGANISATION PORTAL */}
     <Route path="/org/*" element={<React.Suspense fallback={null}><OrgPortal /></React.Suspense>} />
 
-    <Route path="*" element={<Navigate to="/platform" replace />} />
+    {/* CANDIDATE PORTAL & PUBLIC DISCOVERY */}
+    <Route path="/*" element={<React.Suspense fallback={null}><CandidatePortal /></React.Suspense>} />
   </Routes>
 );

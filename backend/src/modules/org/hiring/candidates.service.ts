@@ -17,6 +17,7 @@ import { CandidateInputDto, CandidateQueryDto, UpdateCandidateDto } from './dto'
 
 export const PUBLIC_CANDIDATE_SELECT = {
   id: true,
+  userId: true,
   firstName: true,
   lastName: true,
   headline: true,
@@ -59,6 +60,10 @@ export class CandidatesService {
   }
 
   async isUnlocked(ctx: OrgContext, id: string): Promise<boolean> {
+    const hasApplication = await this.prisma.application.count({
+      where: { AND: [applicationScope(ctx), { candidateId: id }] },
+    });
+    if (hasApplication > 0) return true;
     const set = await this.unlockedSet([id]);
     return set.has(id);
   }
@@ -103,7 +108,7 @@ export class CandidatesService {
         name: `${c.firstName} ${c.lastName}`,
         applications: _count.applications,
         saved: saved.length > 0,
-        unlocked: unlocked.has(c.id),
+        unlocked: _count.applications > 0 || unlocked.has(c.id),
       })),
       total,
       page,
@@ -113,7 +118,6 @@ export class CandidatesService {
 
   async get(ctx: OrgContext, id: string) {
     const c = await this.findInOrg(ctx, id);
-    const unlocked = can(ctx, 'candidates.resume.view') && (await this.unlockedSet([id])).has(id);
     const [applications, notes, saved, messages] = await Promise.all([
       this.prisma.application.findMany({
         where: { AND: [applicationScope(ctx), { candidateId: id }] },
@@ -129,6 +133,8 @@ export class CandidatesService {
       }),
       this.prisma.candidateMessage.count({ where: { organisationId: ctx.organisationId, candidateId: id } }),
     ]);
+    const hasApplication = applications.length > 0;
+    const unlocked = hasApplication || (can(ctx, 'candidates.resume.view') && (await this.unlockedSet([id])).has(id));
     const matchRuns = applications.length
       ? await this.prisma.aiRun.findMany({
           where: {
@@ -150,6 +156,7 @@ export class CandidatesService {
 
     return {
       id: c.id,
+      userId: c.userId,
       name: `${c.firstName} ${c.lastName}`,
       firstName: c.firstName,
       lastName: c.lastName,
@@ -162,7 +169,7 @@ export class CandidatesService {
       createdAt: c.createdAt,
       hasResume: !!(c.resumeText || c.resumeUrl),
       unlocked,
-      unlockCost: TOKEN_COSTS.RESUME_VIEW,
+      unlockCost: hasApplication ? 0 : TOKEN_COSTS.RESUME_VIEW,
       contact: unlocked
         ? { email: c.email, phone: c.phone, resumeText: c.resumeText, resumeUrl: c.resumeUrl }
         : null,
@@ -194,6 +201,18 @@ export class CandidatesService {
 
   async unlock(ctx: OrgContext, id: string) {
     const c = await this.findInOrg(ctx, id);
+    const hasApplication = await this.prisma.application.count({
+      where: { AND: [applicationScope(ctx), { candidateId: id }] },
+    });
+    if (hasApplication > 0) {
+      // In an organisation, a candidate who has at least one application there is treated as unlocked
+      // with no token charge and no token_transactions row created.
+      return {
+        unlocked: true,
+        charged: false,
+        contact: { email: c.email, phone: c.phone, resumeText: c.resumeText, resumeUrl: c.resumeUrl },
+      };
+    }
     const result = await this.tokens.consume(
       { organisationId: ctx.organisationId, userId: ctx.userId, role: ctx.role },
       {

@@ -291,12 +291,17 @@ export class ApplicationsService {
         candidate: {
           select: {
             id: true,
+            userId: true,
             firstName: true,
             lastName: true,
             headline: true,
             skills: true,
             experienceYears: true,
             location: true,
+            email: true,
+            phone: true,
+            resumeText: true,
+            resumeUrl: true,
           },
         },
         job: {
@@ -362,8 +367,20 @@ export class ApplicationsService {
           }
         : null,
       candidate: {
-        ...app.candidate,
+        id: app.candidate.id,
         name: `${app.candidate.firstName} ${app.candidate.lastName}`,
+        firstName: app.candidate.firstName,
+        lastName: app.candidate.lastName,
+        headline: app.candidate.headline,
+        skills: app.candidate.skills,
+        experienceYears: app.candidate.experienceYears,
+        location: app.candidate.location,
+        contact: {
+          email: app.candidate.email,
+          phone: app.candidate.phone,
+        },
+        resumeUrl: app.candidate.resumeUrl,
+        resumeText: app.candidate.resumeText,
       },
       job: app.job,
       assignedTo: app.assignedToId
@@ -373,7 +390,10 @@ export class ApplicationsService {
       rejectReasonRequired: settings?.rejectReasonRequired ?? true,
       history: app.history.map((h) => ({
         ...h,
-        actor: users.get(h.actorId)?.name ?? "Former member",
+        actor:
+          app.candidate.userId && h.actorId === app.candidate.userId
+            ? "Applicant"
+            : (users.get(h.actorId)?.name ?? "Former member"),
       })),
       interviews: app.interviews,
       offers: app.offers,

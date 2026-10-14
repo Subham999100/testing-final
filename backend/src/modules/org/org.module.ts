@@ -9,6 +9,7 @@ import { RecruiterController } from './recruiter/recruiter.controller';
 import { RecruiterService } from './recruiter/recruiter.service';
 import { RecruiterReportsService } from './recruiter/reports.service';
 import { RecruiterOutreachService } from './recruiter/outreach.service';
+import { GlobalTalentSearchService } from './recruiter/global-talent-search.service';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -99,9 +100,11 @@ import { OrgSupportService } from './support/org-support.service';
     EngagementService,
     InsightsService,
     OrgSupportService,
+    GlobalTalentSearchService,
   ],
   exports: [
     OrgSupportService,
+    GlobalTalentSearchService,
   ],
 })
 export class OrgModule {}
