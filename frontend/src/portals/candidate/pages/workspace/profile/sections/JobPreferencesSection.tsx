@@ -1,8 +1,9 @@
 // ============================================================
 // Clyptus Job Portal - Candidate Portal (Design B)
 // Section: Job Preferences
-// Real UI for preferredJobTypes, preferredWorkModes, preferred locations (auto-split on comma, max 10),
-// expectedSalary with amount in words, noticePeriod, optional currentSalary (no hardcoded defaults)
+// Target job roles (tag input, max 10), preferredJobTypes, preferredWorkModes,
+// preferred locations, relocation toggle, work authorization dropdown,
+// expectedSalary with amount in words, noticePeriod, and optional currentSalary
 // ============================================================
 
 import React, { useState } from 'react';
@@ -13,20 +14,23 @@ import { SectionCard } from '../../../../components/SectionCard';
 import { Modal } from '../../../../components/Modal';
 import { Chip } from '../../../../components/Chip';
 import { EmptyState } from '../../../../components/EmptyState';
-import { NOTICE_PERIODS, inrToWords } from '../../../../lib/constants';
+import { NOTICE_PERIODS, inrToWords, WORK_AUTHORIZATION_OPTIONS } from '../../../../lib/constants';
 import { CandidateFullProfile } from '../../../../lib/types';
 import { useProfileSectionUpdate } from '../hooks/useProfileSectionUpdate';
-import { Compass, Briefcase, MapPin, IndianRupee, Clock } from 'lucide-react';
+import { Compass, Briefcase, MapPin, IndianRupee, Clock, ShieldCheck, Globe2 } from 'lucide-react';
 
 const ALL_JOB_TYPES = ['Full-time', 'Internship', 'Contract', 'Part-time'] as const;
 const ALL_WORK_MODES = ['Remote', 'Hybrid', 'Onsite'] as const;
 
 const preferencesSchema = z.object({
+  targetRoles: z.array(z.string()).max(10, 'Maximum 10 target roles allowed').optional(),
   preferredJobTypes: z.array(z.string()).min(1, 'Select at least one job type'),
   preferredWorkModes: z.array(z.string()).min(1, 'Select at least one work mode'),
   preferredLocations: z
     .array(z.string())
     .max(10, 'Maximum 10 preferred locations allowed'),
+  willingToRelocate: z.boolean().optional(),
+  workAuthorization: z.string().optional(),
   expectedSalary: z.coerce.number().min(0).optional(),
   currentSalary: z.coerce.number().min(0).optional(),
   noticePeriod: z.string().optional(),
@@ -41,6 +45,7 @@ export interface JobPreferencesSectionProps {
 export const JobPreferencesSection: React.FC<JobPreferencesSectionProps> = ({ profile }) => {
   const updateMutation = useProfileSectionUpdate();
   const [isOpen, setIsOpen] = useState(false);
+  const [roleInput, setRoleInput] = useState('');
   const [locationInput, setLocationInput] = useState('');
 
   const isFromResume = Boolean(profile.fromResumeSections?.includes('jobPreferences'));
@@ -56,17 +61,21 @@ export const JobPreferencesSection: React.FC<JobPreferencesSectionProps> = ({ pr
   } = useForm<PreferencesFormValues>({
     resolver: zodResolver(preferencesSchema),
     defaultValues: {
+      targetRoles: profile.targetRoles || [],
       preferredJobTypes: profile.preferredJobTypes || [],
       preferredWorkModes: (profile.preferredWorkModes || []).map((m) =>
         m === 'On-site' ? 'Onsite' : m,
       ),
       preferredLocations: profile.preferredLocations || [],
+      willingToRelocate: Boolean(profile.willingToRelocate),
+      workAuthorization: profile.workAuthorization || '',
       expectedSalary: profile.expectedSalary || undefined,
       currentSalary: profile.currentSalary || undefined,
       noticePeriod: profile.noticePeriod || '',
     },
   });
 
+  const selectedRoles = watch('targetRoles') || [];
   const selectedJobTypes = watch('preferredJobTypes') || [];
   const selectedWorkModes = watch('preferredWorkModes') || [];
   const selectedLocations = watch('preferredLocations') || [];
@@ -75,17 +84,38 @@ export const JobPreferencesSection: React.FC<JobPreferencesSectionProps> = ({ pr
 
   const handleOpen = () => {
     reset({
+      targetRoles: profile.targetRoles || [],
       preferredJobTypes: profile.preferredJobTypes || [],
       preferredWorkModes: (profile.preferredWorkModes || []).map((m) =>
         m === 'On-site' ? 'Onsite' : m,
       ),
       preferredLocations: profile.preferredLocations || [],
+      willingToRelocate: Boolean(profile.willingToRelocate),
+      workAuthorization: profile.workAuthorization || '',
       expectedSalary: profile.expectedSalary || undefined,
       currentSalary: profile.currentSalary || undefined,
       noticePeriod: profile.noticePeriod || '',
     });
+    setRoleInput('');
     setLocationInput('');
     setIsOpen(true);
+  };
+
+  const handleAddRoles = (input: string) => {
+    if (!input.trim()) return;
+    const tokens = input
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    const merged = Array.from(new Set([...selectedRoles, ...tokens])).slice(0, 10);
+    setValue('targetRoles', merged, { shouldDirty: true, shouldValidate: true });
+    setRoleInput('');
+  };
+
+  const handleRemoveRole = (roleToRemove: string) => {
+    const filtered = selectedRoles.filter((r) => r.toLowerCase() !== roleToRemove.toLowerCase());
+    setValue('targetRoles', filtered, { shouldDirty: true, shouldValidate: true });
   };
 
   const handleAddLocations = (input: string) => {
@@ -107,9 +137,12 @@ export const JobPreferencesSection: React.FC<JobPreferencesSectionProps> = ({ pr
 
   const onSubmit = async (values: PreferencesFormValues) => {
     await updateMutation.mutateAsync({
+      targetRoles: values.targetRoles,
       preferredJobTypes: values.preferredJobTypes,
       preferredWorkModes: values.preferredWorkModes,
       preferredLocations: values.preferredLocations,
+      willingToRelocate: values.willingToRelocate,
+      workAuthorization: values.workAuthorization || undefined,
       expectedSalary: values.expectedSalary ? Number(values.expectedSalary) : undefined,
       currentSalary: values.currentSalary ? Number(values.currentSalary) : undefined,
       noticePeriod: values.noticePeriod || undefined,
@@ -118,9 +151,12 @@ export const JobPreferencesSection: React.FC<JobPreferencesSectionProps> = ({ pr
   };
 
   const hasPreferences =
+    (profile.targetRoles && profile.targetRoles.length > 0) ||
     (profile.preferredJobTypes && profile.preferredJobTypes.length > 0) ||
     (profile.preferredWorkModes && profile.preferredWorkModes.length > 0) ||
     (profile.preferredLocations && profile.preferredLocations.length > 0) ||
+    profile.willingToRelocate ||
+    profile.workAuthorization ||
     profile.expectedSalary ||
     profile.noticePeriod;
 
@@ -133,113 +169,221 @@ export const JobPreferencesSection: React.FC<JobPreferencesSectionProps> = ({ pr
         editAriaLabel="Edit job preferences"
       >
         {hasPreferences ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            {/* Preferred Job Types */}
-            <div>
-              <span className="text-[#5C564E] font-medium block mb-1.5">Preferred Job Types</span>
-              <div className="flex flex-wrap gap-1.5">
-                {profile.preferredJobTypes && profile.preferredJobTypes.length > 0 ? (
-                  profile.preferredJobTypes.map((t) => <Chip key={t} label={t} variant="accent" />)
+          <div className="space-y-4 text-xs">
+            {/* Target Job Roles */}
+            {profile.targetRoles && profile.targetRoles.length > 0 && (
+              <div>
+                <span className="text-[#5C564E] font-medium block mb-1.5">Target Job Roles</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {profile.targetRoles.map((role) => (
+                    <Chip key={role} label={role} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Preferred Job Types */}
+              <div>
+                <span className="text-[#5C564E] font-medium block mb-1.5">Preferred Job Types</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {(profile.preferredJobTypes || []).map((type) => (
+                    <span
+                      key={type}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#FAF6F1] border border-[#E8DFD4] text-[#1B1A17] font-semibold text-[11px]"
+                    >
+                      <Briefcase className="w-3 h-3 text-[#C2410C]" />
+                      {type}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preferred Work Modes */}
+              <div>
+                <span className="text-[#5C564E] font-medium block mb-1.5">Work Modes</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {(profile.preferredWorkModes || []).map((mode) => (
+                    <span
+                      key={mode}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#FAF6F1] border border-[#E8DFD4] text-[#1B1A17] font-semibold text-[11px]"
+                    >
+                      <Compass className="w-3 h-3 text-[#C2410C]" />
+                      {mode}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preferred Locations & Relocation */}
+              <div>
+                <span className="text-[#5C564E] font-medium block mb-1.5">Preferred Locations</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {(profile.preferredLocations || []).map((loc) => (
+                    <span
+                      key={loc}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#FAF6F1] border border-[#E8DFD4] text-[#1B1A17] font-medium text-[11px]"
+                    >
+                      <MapPin className="w-3 h-3 text-[#5C564E]" />
+                      {loc}
+                    </span>
+                  ))}
+                  {profile.willingToRelocate && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#F0FDF4] border border-[#16A34A]/20 text-[#16A34A] font-semibold text-[11px]">
+                      <Globe2 className="w-3 h-3" />
+                      Willing to relocate
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Work Authorization */}
+              {profile.workAuthorization && (
+                <div>
+                  <span className="text-[#5C564E] font-medium block mb-1.5">Work Authorization</span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#FAF6F1] border border-[#E8DFD4] text-[#1B1A17] font-semibold text-[11px]">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#16A34A]" />
+                    {profile.workAuthorization}
+                  </span>
+                </div>
+              )}
+
+              {/* Expected & Current Salary */}
+              <div>
+                <span className="text-[#5C564E] font-medium block mb-1.5">Compensation</span>
+                <div className="space-y-0.5">
+                  {profile.expectedSalary ? (
+                    <p className="font-semibold text-[#1B1A17]">
+                      Expected: ₹{Number(profile.expectedSalary).toLocaleString('en-IN')}/yr
+                      <span className="text-[11px] text-[#5C564E] font-normal block">
+                        ({inrToWords(Number(profile.expectedSalary))})
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="text-[#5C564E] italic">Expected salary not specified</p>
+                  )}
+                  {profile.currentSalary && (
+                    <p className="text-[#5C564E] text-[11px]">
+                      Current: ₹{Number(profile.currentSalary).toLocaleString('en-IN')}/yr
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Notice Period */}
+              <div>
+                <span className="text-[#5C564E] font-medium block mb-1.5">Notice Period</span>
+                {profile.noticePeriod ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#FAF6F1] border border-[#E8DFD4] text-[#1B1A17] font-semibold text-[11px]">
+                    <Clock className="w-3 h-3 text-[#5C564E]" />
+                    {profile.noticePeriod}
+                  </span>
                 ) : (
                   <span className="text-[#5C564E] italic">Not specified</span>
                 )}
               </div>
-            </div>
-
-            {/* Preferred Work Modes */}
-            <div>
-              <span className="text-[#5C564E] font-medium block mb-1.5">Work Modes</span>
-              <div className="flex flex-wrap gap-1.5">
-                {profile.preferredWorkModes && profile.preferredWorkModes.length > 0 ? (
-                  profile.preferredWorkModes.map((m) => <Chip key={m} label={m} />)
-                ) : (
-                  <span className="text-[#5C564E] italic">Not specified</span>
-                )}
-              </div>
-            </div>
-
-            {/* Preferred Locations */}
-            <div>
-              <span className="text-[#5C564E] font-medium block mb-1.5">Preferred Locations</span>
-              <div className="flex flex-wrap gap-1.5">
-                {profile.preferredLocations && profile.preferredLocations.length > 0 ? (
-                  profile.preferredLocations.map((loc) => <Chip key={loc} label={loc} variant="muted" />)
-                ) : (
-                  <span className="text-[#5C564E] italic">Any location</span>
-                )}
-              </div>
-            </div>
-
-            {/* Compensation & Notice */}
-            <div className="space-y-1.5">
-              <span className="text-[#5C564E] font-medium block">Compensation & Availability</span>
-              {profile.expectedSalary && (
-                <p className="text-[#1B1A17] font-semibold flex items-center gap-1">
-                  <span>Expected:</span>
-                  <span>₹{profile.expectedSalary.toLocaleString('en-IN')} / year</span>
-                </p>
-              )}
-              {profile.noticePeriod && (
-                <p className="text-[#5C564E] flex items-center gap-1">
-                  <span>Notice Period:</span>
-                  <span className="text-[#1B1A17] font-medium">{profile.noticePeriod}</span>
-                </p>
-              )}
             </div>
           </div>
         ) : (
           <EmptyState
             icon={<Compass className="w-8 h-8 text-[#5C564E]" />}
-            title="No job preferences set"
-            description="Specify desired job types, remote/onsite modes, salary expectations, and notice period."
-            actionLabel="+ Set job preferences"
+            title="No preferences configured"
+            description="Set your target roles, job types, preferred locations, and expected compensation to get tailored opportunities."
+            actionLabel="+ Set preferences"
             onAction={handleOpen}
           />
         )}
       </SectionCard>
 
-      {/* Preferences Modal */}
+      {/* Preferences Edit Modal */}
       <Modal
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
         title="Edit Job Preferences"
-        subtitle="Specify what kind of opportunities, salary, and work setups you are looking for."
+        subtitle="Set your target titles, availability, work modes, and compensation expectations."
         isDirty={isDirty}
         isSubmitting={isSubmitting || updateMutation.isPending}
         onSubmit={handleSubmit(onSubmit)}
         maxWidth="lg"
       >
-        <div className="space-y-5">
-          {/* Job Types */}
+        <div className="space-y-4">
+          {/* Target Job Roles (Tag input, max 10) */}
           <div>
-            <label className="block text-xs font-semibold text-[#1B1A17] mb-2">
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="target-role-input" className="block text-xs font-semibold text-[#1B1A17]">
+                Target Job Roles / Desired Titles (Max 10)
+              </label>
+              <span className="text-[11px] text-[#5C564E]">
+                {selectedRoles.length}/10 roles
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <input
+                id="target-role-input"
+                type="text"
+                value={roleInput}
+                onChange={(e) => setRoleInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddRoles(roleInput);
+                  }
+                }}
+                placeholder="e.g. Frontend Engineer, Full Stack Developer, Tech Lead..."
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E8DFD4] bg-white text-sm text-[#1B1A17] placeholder-[#5C564E]/60 focus:outline-none focus:ring-2 focus:ring-[#C2410C]/20"
+              />
+              <button
+                type="button"
+                onClick={() => handleAddRoles(roleInput)}
+                className="px-4 py-2.5 rounded-xl bg-[#FAF6F1] hover:bg-[#F2E9E0] text-[#1B1A17] font-semibold text-xs border border-[#E8DFD4] shrink-0"
+              >
+                Add
+              </button>
+            </div>
+
+            {selectedRoles.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2 p-2.5 rounded-xl bg-[#FAF6F1]/50 border border-[#E8DFD4]">
+                {selectedRoles.map((role) => (
+                  <Chip
+                    key={role}
+                    label={role}
+                    onRemove={() => handleRemoveRole(role)}
+                    removeAriaLabel={`Remove target role ${role}`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Preferred Job Types */}
+          <div>
+            <label className="block text-xs font-semibold text-[#1B1A17] mb-1.5">
               Preferred Job Types <span className="text-[#DC2626]">*</span>
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {ALL_JOB_TYPES.map((type) => {
-                const checked = selectedJobTypes.includes(type);
+                const isSelected = selectedJobTypes.includes(type);
                 return (
-                  <label
+                  <button
                     key={type}
-                    className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium cursor-pointer transition-colors ${
-                      checked
-                        ? 'border-[#C2410C] bg-[#FFF1E6] text-[#C2410C]'
-                        : 'border-[#E8DFD4] bg-white text-[#1B1A17] hover:bg-[#FAF6F1]'
+                    type="button"
+                    onClick={() => {
+                      const updated = isSelected
+                        ? selectedJobTypes.filter((t) => t !== type)
+                        : [...selectedJobTypes, type];
+                      setValue('preferredJobTypes', updated, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      });
+                    }}
+                    className={`p-2.5 rounded-xl border text-xs font-semibold transition-all ${
+                      isSelected
+                        ? 'bg-[#C2410C] text-white border-[#C2410C]'
+                        : 'bg-white text-[#1B1A17] border-[#E8DFD4] hover:bg-[#FAF6F1]'
                     }`}
                   >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                          ? [...selectedJobTypes, type]
-                          : selectedJobTypes.filter((t) => t !== type);
-                        setValue('preferredJobTypes', next, { shouldDirty: true, shouldValidate: true });
-                      }}
-                      className="sr-only"
-                    />
-                    <span>{type}</span>
-                  </label>
+                    {type}
+                  </button>
                 );
               })}
             </div>
@@ -250,36 +394,35 @@ export const JobPreferencesSection: React.FC<JobPreferencesSectionProps> = ({ pr
             )}
           </div>
 
-          {/* Work Modes */}
+          {/* Preferred Work Modes */}
           <div>
-            <label className="block text-xs font-semibold text-[#1B1A17] mb-2">
+            <label className="block text-xs font-semibold text-[#1B1A17] mb-1.5">
               Preferred Work Modes <span className="text-[#DC2626]">*</span>
             </label>
             <div className="grid grid-cols-3 gap-2">
               {ALL_WORK_MODES.map((mode) => {
-                const checked = selectedWorkModes.includes(mode);
+                const isSelected = selectedWorkModes.includes(mode);
                 return (
-                  <label
+                  <button
                     key={mode}
-                    className={`flex items-center justify-center p-2.5 rounded-xl border text-xs font-medium cursor-pointer transition-colors ${
-                      checked
-                        ? 'border-[#C2410C] bg-[#FFF1E6] text-[#C2410C]'
-                        : 'border-[#E8DFD4] bg-white text-[#1B1A17] hover:bg-[#FAF6F1]'
+                    type="button"
+                    onClick={() => {
+                      const updated = isSelected
+                        ? selectedWorkModes.filter((m) => m !== mode)
+                        : [...selectedWorkModes, mode];
+                      setValue('preferredWorkModes', updated, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      });
+                    }}
+                    className={`p-2.5 rounded-xl border text-xs font-semibold transition-all ${
+                      isSelected
+                        ? 'bg-[#C2410C] text-white border-[#C2410C]'
+                        : 'bg-white text-[#1B1A17] border-[#E8DFD4] hover:bg-[#FAF6F1]'
                     }`}
                   >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                          ? [...selectedWorkModes, mode]
-                          : selectedWorkModes.filter((m) => m !== mode);
-                        setValue('preferredWorkModes', next, { shouldDirty: true, shouldValidate: true });
-                      }}
-                      className="sr-only"
-                    />
-                    <span>{mode}</span>
-                  </label>
+                    {mode}
+                  </button>
                 );
               })}
             </div>
@@ -290,7 +433,7 @@ export const JobPreferencesSection: React.FC<JobPreferencesSectionProps> = ({ pr
             )}
           </div>
 
-          {/* Preferred Locations (Chips, auto-split on comma, max 10) */}
+          {/* Locations */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label htmlFor="pref-loc-input" className="block text-xs font-semibold text-[#1B1A17]">
@@ -336,6 +479,49 @@ export const JobPreferencesSection: React.FC<JobPreferencesSectionProps> = ({ pr
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Relocation Toggle & Work Authorization */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            {/* Relocation Toggle */}
+            <div className="p-3 rounded-xl border border-[#E8DFD4] bg-[#FAF6F1]/40 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-semibold text-[#1B1A17] block">Willing to Relocate</span>
+                <span className="text-[11px] text-[#5C564E] block mt-0.5">Open to moving for the right role</span>
+              </div>
+              <Controller
+                name="willingToRelocate"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    type="checkbox"
+                    checked={field.value}
+                    onChange={(e) => field.onChange(e.target.checked)}
+                    aria-label="Willing to relocate"
+                    className="w-4 h-4 rounded border-[#D7C9BA] text-[#C2410C] focus:ring-[#C2410C] accent-[#C2410C] cursor-pointer"
+                  />
+                )}
+              />
+            </div>
+
+            {/* Work Authorization Selector */}
+            <div>
+              <label htmlFor="workAuthorization" className="block text-xs font-semibold text-[#1B1A17] mb-1">
+                Work Authorization Status
+              </label>
+              <select
+                id="workAuthorization"
+                {...register('workAuthorization')}
+                className="w-full px-3 py-2.5 rounded-xl border border-[#E8DFD4] bg-white text-xs text-[#1B1A17] focus:outline-none focus:ring-2 focus:ring-[#C2410C]/20"
+              >
+                <option value="">Select work authorization</option>
+                {WORK_AUTHORIZATION_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Salary Expectation with Words */}

@@ -1,19 +1,22 @@
 // ============================================================
 // Clyptus Job Portal - Candidate Portal
 // Component: PhotoCropModal
-// Aspect-ratio configurable crop modal (1:1 circular avatar 400x400 or 4:1 banner 1584x396)
-// With zoom & pan, client-side canvas preview, EXIF-clean webp export
-// Candidate-owned (zero recruiter-portal dependencies)
+// Aspect-ratio configurable crop modal:
+// - Cover Banner: locked to 4:1, canvas export 1584x396
+// - Profile Photo (Avatar): locked to 1:1, canvas export 400x400
+// Features: Zoom, rotation, pan, canvas crop with async Promise toBlob,
+// client-side preview, clean WebP/JPEG export, and double-click prevention
 // ============================================================
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X, ZoomIn, ZoomOut, RotateCw, Check, Loader2 } from 'lucide-react';
+import { getCroppedCanvasBlob } from '../lib/crop.util';
 
 export interface PhotoCropModalProps {
   imageFile: File | null;
   isOpen: boolean;
   onClose: () => void;
-  onCropComplete: (croppedBlob: Blob) => Promise<void>;
+  onCropComplete: (croppedBlob: Blob, previewUrl: string) => Promise<void>;
   isLoading: boolean;
   aspectRatio?: '1:1' | '4:1';
 }
@@ -32,43 +35,21 @@ export const PhotoCropModal: React.FC<PhotoCropModalProps> = ({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [initialPan, setInitialPan] = useState({ x: 0, y: 0 });
+  const [isGeneratingCrop, setIsGeneratingCrop] = useState(false);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
 
-  const targetWidth = aspectRatio === '4:1' ? 1584 : 400;
-  const targetHeight = aspectRatio === '4:1' ? 396 : 400;
+  const isCover = aspectRatio === '4:1';
+  const targetWidth = isCover ? 1584 : 400;
+  const targetHeight = isCover ? 396 : 400;
 
-  useEffect(() => {
-    if (!imageFile) {
-      setImageSrc(null);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImageSrc(reader.result as string);
-      setZoom(1);
-      setRotation(0);
-      setPan({ x: 0, y: 0 });
-    };
-    reader.readAsDataURL(imageFile);
-  }, [imageFile]);
-
-  // Load HTMLImageElement
-  useEffect(() => {
-    if (!imageSrc) return;
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      imgRef.current = img;
-      drawCanvas();
-    };
-    img.src = imageSrc;
-  }, [imageSrc, zoom, rotation, pan, aspectRatio]);
-
-  const drawCanvas = () => {
+  // Draw the image on preview canvas
+  const drawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     const img = imgRef.current;
-    if (!canvas || !img) return;
+    if (!canvas || !img || !img.complete) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -76,19 +57,21 @@ export const PhotoCropModal: React.FC<PhotoCropModalProps> = ({
     canvas.width = targetWidth;
     canvas.height = targetHeight;
 
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.clearRect(0, 0, targetWidth, targetHeight);
 
-    // Save context
     ctx.save();
-
-    // Center origin
     ctx.translate(targetWidth / 2, targetHeight / 2);
-    ctx.rotate((rotation * Math.PI) / 180);
+
+    if (rotation !== 0) {
+      ctx.rotate((rotation * Math.PI) / 180);
+    }
+
     ctx.scale(zoom, zoom);
     ctx.translate(pan.x, pan.y);
 
-    // Calculate scale to cover canvas
-    const imgAspect = img.width / img.height;
+    const imgAspect = img.naturalWidth / img.naturalHeight;
     const canvasAspect = targetWidth / targetHeight;
 
     let drawWidth: number;
@@ -104,18 +87,62 @@ export const PhotoCropModal: React.FC<PhotoCropModalProps> = ({
 
     ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
     ctx.restore();
-  };
+  }, [targetWidth, targetHeight, rotation, zoom, pan]);
 
+  // Read selected file as data URL
+  useEffect(() => {
+    if (!imageFile) {
+      setImageSrc(null);
+      imgRef.current = null;
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImageSrc(reader.result as string);
+      setZoom(1);
+      setRotation(0);
+      setPan({ x: 0, y: 0 });
+    };
+    reader.readAsDataURL(imageFile);
+  }, [imageFile]);
+
+  // Load HTMLImageElement once when imageSrc changes
+  useEffect(() => {
+    if (!imageSrc) return;
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      imgRef.current = img;
+      drawCanvas();
+    };
+    img.src = imageSrc;
+  }, [imageSrc, drawCanvas]);
+
+  // Redraw preview whenever transform props change
+  useEffect(() => {
+    if (imgRef.current) {
+      drawCanvas();
+    }
+  }, [drawCanvas]);
+
+  // Mouse & touch drag handling
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
-    setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    setDragStart({ x: e.clientX, y: e.clientY });
+    setInitialPan({ ...pan });
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
+    if (!isDragging || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const scaleFactor = targetWidth / (rect.width || targetWidth);
+    const deltaX = (e.clientX - dragStart.x) * scaleFactor;
+    const deltaY = (e.clientY - dragStart.y) * scaleFactor;
     setPan({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y,
+      x: initialPan.x + deltaX,
+      y: initialPan.y + deltaY,
     });
   };
 
@@ -123,24 +150,56 @@ export const PhotoCropModal: React.FC<PhotoCropModalProps> = ({
     setIsDragging(false);
   };
 
-  const handleSaveCrop = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  // Apply button handler
+  const handleApply = async () => {
+    console.log('[PhotoCropModal] Apply click triggered', {
+      aspectRatio,
+      targetWidth,
+      targetHeight,
+      zoom,
+      rotation,
+      pan,
+    });
 
-    canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          void onCropComplete(blob);
-        }
-      },
-      'image/webp',
-      0.9,
-    );
+    if (!imgRef.current) {
+      console.error('[PhotoCropModal] Image not loaded yet');
+      return;
+    }
+
+    try {
+      setIsGeneratingCrop(true);
+
+      const croppedBlob = await getCroppedCanvasBlob(
+        imgRef.current,
+        pan,
+        zoom,
+        rotation,
+        targetWidth,
+        targetHeight,
+        'image/webp',
+        0.9,
+      );
+
+      const previewUrl = URL.createObjectURL(croppedBlob);
+      console.log('[PhotoCropModal] Crop result generated', {
+        blobSize: croppedBlob.size,
+        blobType: croppedBlob.type,
+        previewUrl,
+      });
+
+      // Pass cropped blob and instant previewUrl back to parent
+      await onCropComplete(croppedBlob, previewUrl);
+      console.log('[PhotoCropModal] onCropComplete completed successfully');
+    } catch (err) {
+      console.error('[PhotoCropModal] Error during crop application:', err);
+    } finally {
+      setIsGeneratingCrop(false);
+    }
   };
 
   if (!isOpen || !imageFile) return null;
 
-  const isCover = aspectRatio === '4:1';
+  const isBusy = isLoading || isGeneratingCrop;
 
   return (
     <div
@@ -149,7 +208,11 @@ export const PhotoCropModal: React.FC<PhotoCropModalProps> = ({
       aria-modal="true"
       aria-labelledby="crop-modal-title"
     >
-      <div className={`bg-white rounded-2xl w-full ${isCover ? 'max-w-2xl' : 'max-w-md'} shadow-xl border border-[#E8DFD4] overflow-hidden`}>
+      <div
+        className={`bg-white rounded-2xl w-full ${
+          isCover ? 'max-w-2xl' : 'max-w-md'
+        } shadow-xl border border-[#E8DFD4] overflow-hidden`}
+      >
         <div className="p-4 sm:p-5 border-b border-[#E8DFD4] flex items-center justify-between">
           <div>
             <h3 id="crop-modal-title" className="font-semibold text-[#1B1A17] text-base font-serif">
@@ -164,8 +227,8 @@ export const PhotoCropModal: React.FC<PhotoCropModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            disabled={isLoading}
-            className="p-1 rounded-lg text-[#5C564E] hover:text-[#1B1A17] hover:bg-[#FAF6F1] transition-colors"
+            disabled={isBusy}
+            className="p-1 rounded-lg text-[#5C564E] hover:text-[#1B1A17] hover:bg-[#FAF6F1] transition-colors disabled:opacity-50"
             aria-label="Close crop modal"
           >
             <X className="w-5 h-5" />
@@ -185,7 +248,7 @@ export const PhotoCropModal: React.FC<PhotoCropModalProps> = ({
           >
             <canvas
               ref={canvasRef}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover block"
               style={{ width: '100%', height: '100%' }}
             />
           </div>
@@ -216,7 +279,8 @@ export const PhotoCropModal: React.FC<PhotoCropModalProps> = ({
             <button
               type="button"
               onClick={() => setRotation((r) => (r + 90) % 360)}
-              className="px-3 py-1.5 rounded-lg border border-[#E8DFD4] text-[#1B1A17] hover:bg-[#FAF6F1] text-xs font-medium flex items-center gap-1.5 transition-colors"
+              disabled={isBusy}
+              className="px-3 py-1.5 rounded-lg border border-[#E8DFD4] text-[#1B1A17] hover:bg-[#FAF6F1] text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
               title="Rotate 90 degrees"
             >
               <RotateCw className="w-3.5 h-3.5" />
@@ -228,21 +292,21 @@ export const PhotoCropModal: React.FC<PhotoCropModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              disabled={isLoading}
+              disabled={isBusy}
               className="px-4 py-2 rounded-xl border border-[#E8DFD4] text-[#1B1A17] hover:bg-[#FAF6F1] text-xs font-semibold transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="button"
-              onClick={handleSaveCrop}
-              disabled={isLoading}
+              onClick={handleApply}
+              disabled={isBusy}
               className="px-5 py-2 rounded-xl bg-[#C2410C] hover:bg-[#9A3412] text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors disabled:opacity-50"
             >
-              {isLoading ? (
+              {isBusy ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Saving...</span>
+                  <span>Applying...</span>
                 </>
               ) : (
                 <>

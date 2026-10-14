@@ -5,7 +5,7 @@
 // Fallback brand tint #F3D9C4, skeleton loader, and delete confirmation dialog
 // ============================================================
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Camera, Image as ImageIcon, Trash2, Palette, Upload } from 'lucide-react';
 import { PhotoCropModal } from '../../../components/PhotoCropModal';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
@@ -42,6 +42,34 @@ export const ProfileBanner: React.FC<ProfileBannerProps> = ({ coverUrl, isLoadin
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [coverImage, setCoverImage] = useState<string | null>(coverUrl || null);
+  const menuContainerRef = useRef<HTMLDivElement>(null);
+
+  // Sync state when prop coverUrl updates
+  useEffect(() => {
+    setCoverImage(coverUrl || null);
+  }, [coverUrl]);
+
+  // Close menu on outside click or Escape key
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsMenuOpen(false);
+    };
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuContainerRef.current && !menuContainerRef.current.contains(e.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMenuOpen]);
+
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -63,17 +91,47 @@ export const ProfileBanner: React.FC<ProfileBannerProps> = ({ coverUrl, isLoadin
     e.target.value = '';
   };
 
-  const handleCropComplete = async (croppedBlob: Blob) => {
+  const handleCropComplete = async (croppedBlob: Blob, previewUrl: string) => {
+    console.log('[ProfileBanner] Apply clicked, starting upload flow', {
+      blobSize: croppedBlob.size,
+      blobType: croppedBlob.type,
+      previewUrl,
+    });
+
+    // 1. Immediately update UI state with local preview blob URL
+    setCoverImage(previewUrl);
+    setImageError(false);
+    console.log('[ProfileBanner] State updated with immediate preview', previewUrl);
+
+    // 2. Upload to backend
     setIsUploading(true);
+    console.log('[ProfileBanner] Upload request sent to /candidate/profile/cover');
+
     try {
-      await candidateApi.uploadCover(croppedBlob);
+      const res = await candidateApi.uploadCover(croppedBlob);
+      console.log('[ProfileBanner] Upload response received', res);
+
+      const returnedUrl = res?.coverUrl || previewUrl;
+      const cacheBustedUrl = returnedUrl.startsWith('data:')
+        ? returnedUrl
+        : `${returnedUrl}?t=${Date.now()}`;
+
+      setCoverImage(cacheBustedUrl);
+      console.log('[ProfileBanner] State updated with cache-busted uploaded URL', cacheBustedUrl);
+
       toast.success('Cover photo updated successfully.');
+
+      // Close modal only after upload succeeds
       setIsCropOpen(false);
       setSelectedFile(null);
-      setImageError(false);
+
+      // Refetch profile data in background to synchronize cache
       await queryClient.invalidateQueries({ queryKey: candidateQueryKeys.profile });
     } catch (err: any) {
+      console.error('[ProfileBanner] Upload failed:', err);
       toast.error(err?.message || 'Failed to upload cover photo.');
+      // Revert to original coverUrl if upload fails
+      setCoverImage(coverUrl || null);
     } finally {
       setIsUploading(false);
     }
@@ -84,10 +142,12 @@ export const ProfileBanner: React.FC<ProfileBannerProps> = ({ coverUrl, isLoadin
     try {
       await candidateApi.deleteCover();
       toast.success('Cover photo removed.');
+      setCoverImage(null);
       setIsConfirmDeleteOpen(false);
       setImageError(false);
       await queryClient.invalidateQueries({ queryKey: candidateQueryKeys.profile });
     } catch (err: any) {
+      console.error('[ProfileBanner] Delete failed:', err);
       toast.error(err?.message || 'Failed to remove cover photo.');
     } finally {
       setIsDeleting(false);
@@ -97,7 +157,9 @@ export const ProfileBanner: React.FC<ProfileBannerProps> = ({ coverUrl, isLoadin
   const handleSelectPreset = async (preset: (typeof PRESET_COVERS)[0]) => {
     try {
       // Save preset gradient or color as coverUrl value or style identifier
-      await candidateApi.updateProfile({ coverUrl: `preset:${preset.id}` });
+      const presetId = `preset:${preset.id}`;
+      setCoverImage(presetId);
+      await candidateApi.updateProfile({ coverUrl: presetId });
       toast.success(`Applied ${preset.name} cover.`);
       setIsPresetModalOpen(false);
       setImageError(false);
@@ -114,20 +176,20 @@ export const ProfileBanner: React.FC<ProfileBannerProps> = ({ coverUrl, isLoadin
   }
 
   // Determine preset or custom image
-  const isPreset = coverUrl?.startsWith('preset:');
+  const isPreset = coverImage?.startsWith('preset:');
   const activePreset = isPreset
-    ? PRESET_COVERS.find((p) => p.id === coverUrl?.replace('preset:', ''))
+    ? PRESET_COVERS.find((p) => p.id === coverImage?.replace('preset:', ''))
     : null;
 
   return (
     <div className="relative w-full h-[100px] sm:h-[140px] md:h-[200px] rounded-t-2xl overflow-hidden select-none bg-[#F3D9C4]">
       {/* Banner Display */}
-      {coverUrl && !imageError ? (
+      {coverImage && !imageError ? (
         activePreset ? (
           <div className="w-full h-full" style={activePreset.style} />
         ) : (
           <img
-            src={coverUrl}
+            src={coverImage}
             alt=""
             aria-hidden="true"
             onError={() => setImageError(true)}
@@ -139,7 +201,7 @@ export const ProfileBanner: React.FC<ProfileBannerProps> = ({ coverUrl, isLoadin
       )}
 
       {/* Camera Action Button */}
-      <div className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 z-20">
+      <div ref={menuContainerRef} className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 z-20">
         <button
           type="button"
           onClick={() => setIsMenuOpen(!isMenuOpen)}

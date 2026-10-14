@@ -6,11 +6,12 @@
 // "City · Open to work" line, and primary Edit Profile CTA
 // ============================================================
 
-import React, { useState, useRef } from 'react';
-import { Camera, Trash2, Upload, Pencil, CheckCircle2 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Camera, Trash2, Upload, Pencil, CheckCircle2, Share2 } from 'lucide-react';
 import { PhotoCropModal } from '../../../components/PhotoCropModal';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { EditProfileModal } from './EditProfileModal';
+import { ShareProfileModal } from './ShareProfileModal';
 import { CandidateFullProfile } from '../../../lib/types';
 import { candidateApi } from '../../../lib/api';
 import { useQueryClient } from '@tanstack/react-query';
@@ -31,7 +32,35 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isLoading
   const [isDeletePhotoOpen, setIsDeletePhotoOpen] = useState(false);
   const [isDeletingPhoto, setIsDeletingPhoto] = useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [isShareProfileOpen, setIsShareProfileOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoMenuRef = useRef<HTMLDivElement>(null);
+
+  const [avatarImage, setAvatarImage] = useState<string | null>(profile.photoUrl || null);
+
+  // Sync avatarImage when profile prop changes
+  useEffect(() => {
+    setAvatarImage(profile.photoUrl || null);
+  }, [profile.photoUrl]);
+
+  // Close photo menu on outside click or Escape key
+  useEffect(() => {
+    if (!isPhotoMenuOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsPhotoMenuOpen(false);
+    };
+    const handleClickOutside = (e: MouseEvent) => {
+      if (photoMenuRef.current && !photoMenuRef.current.contains(e.target as Node)) {
+        setIsPhotoMenuOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isPhotoMenuOpen]);
 
   const initials = (
     (profile.firstName?.[0] || '') + (profile.lastName?.[0] || '')
@@ -57,16 +86,46 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isLoading
     e.target.value = '';
   };
 
-  const handleCropComplete = async (croppedBlob: Blob) => {
+  const handleCropComplete = async (croppedBlob: Blob, previewUrl: string) => {
+    console.log('[ProfileHeader] Apply clicked, starting upload flow', {
+      blobSize: croppedBlob.size,
+      blobType: croppedBlob.type,
+      previewUrl,
+    });
+
+    // 1. Immediately update UI state with local preview blob URL
+    setAvatarImage(previewUrl);
+    console.log('[ProfileHeader] State updated with immediate preview', previewUrl);
+
+    // 2. Upload to backend
     setIsUploadingPhoto(true);
+    console.log('[ProfileHeader] Upload request sent to /candidate/profile/photo');
+
     try {
-      await candidateApi.uploadPhoto(croppedBlob);
+      const res = await candidateApi.uploadPhoto(croppedBlob);
+      console.log('[ProfileHeader] Upload response received', res);
+
+      const returnedUrl = res?.photoUrl || previewUrl;
+      const cacheBustedUrl = returnedUrl.startsWith('data:')
+        ? returnedUrl
+        : `${returnedUrl}?t=${Date.now()}`;
+
+      setAvatarImage(cacheBustedUrl);
+      console.log('[ProfileHeader] State updated with cache-busted uploaded URL', cacheBustedUrl);
+
       toast.success('Profile photo updated.');
+
+      // Close modal only after upload succeeds
       setIsCropModalOpen(false);
       setSelectedPhotoFile(null);
+
+      // Invalidate profile query to synchronize server cache
       await queryClient.invalidateQueries({ queryKey: candidateQueryKeys.profile });
     } catch (err: any) {
+      console.error('[ProfileHeader] Upload failed:', err);
       toast.error(err?.message || 'Failed to upload photo.');
+      // Revert to original photoUrl on error
+      setAvatarImage(profile.photoUrl || null);
     } finally {
       setIsUploadingPhoto(false);
     }
@@ -77,9 +136,11 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isLoading
     try {
       await candidateApi.deletePhoto();
       toast.success('Profile photo removed.');
+      setAvatarImage(null);
       setIsDeletePhotoOpen(false);
       await queryClient.invalidateQueries({ queryKey: candidateQueryKeys.profile });
     } catch (err: any) {
+      console.error('[ProfileHeader] Delete failed:', err);
       toast.error(err?.message || 'Failed to remove photo.');
     } finally {
       setIsDeletingPhoto(false);
@@ -105,11 +166,11 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isLoading
     <div className="px-5 sm:px-8 pb-6 pt-0 bg-white border-b border-[#E8DFD4] relative">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 -mt-12 sm:-mt-12">
         {/* Avatar with ground-colored ring */}
-        <div className="relative inline-block w-24 h-24 shrink-0">
+        <div ref={photoMenuRef} className="relative inline-block w-24 h-24 shrink-0">
           <div className="w-24 h-24 rounded-full overflow-hidden ring-4 ring-[#FAF6F1] bg-[#FFF1E6] shadow-sm flex items-center justify-center select-none">
-            {profile.photoUrl ? (
+            {avatarImage ? (
               <img
-                src={profile.photoUrl}
+                src={avatarImage}
                 alt={displayName}
                 className="w-full h-full object-cover"
               />
@@ -169,8 +230,18 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isLoading
           )}
         </div>
 
-        {/* Primary Edit Profile Button (aligned right on desktop) */}
-        <div className="sm:self-end">
+        {/* Primary Action Buttons (aligned right on desktop) */}
+        <div className="sm:self-end flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsShareProfileOpen(true)}
+            aria-label="Share public profile"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-[#E8DFD4] hover:border-[#C2410C]/40 bg-[#FAF6F1]/50 hover:bg-[#FAF6F1] text-[#1B1A17] text-xs font-semibold shadow-xs transition-colors focus-visible:outline-2 focus-visible:outline-[#C2410C]"
+          >
+            <Share2 className="w-3.5 h-3.5 text-[#C2410C]" aria-hidden="true" />
+            <span>Share profile</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setIsEditProfileOpen(true)}
@@ -182,6 +253,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isLoading
           </button>
         </div>
       </div>
+
 
       {/* Candidate Name & Info */}
       <div className="mt-4">
@@ -248,7 +320,15 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isLoading
         onClose={() => setIsEditProfileOpen(false)}
         profile={profile}
       />
+
+      {/* Share Public Profile Modal */}
+      <ShareProfileModal
+        isOpen={isShareProfileOpen}
+        onClose={() => setIsShareProfileOpen(false)}
+        profile={profile}
+      />
     </div>
   );
 };
+
 export default ProfileHeader;

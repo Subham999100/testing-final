@@ -38,6 +38,7 @@ import {
 } from "./display";
 import { ResumeSection } from "./ResumeSection";
 import { ProfileEditor } from "./ProfileEditor";
+import { RecruiterVideoProfilePanel } from "./RecruiterVideoProfilePanel";
 import "./recruiter.css";
 function Timeline({ title, rows }: { title: string; rows?: CareerEntry[] }) {
   return (
@@ -410,6 +411,7 @@ function ProfileContent({ id }: { id: string }) {
           </section>
         </div>
         <aside className="r-profile-side">
+          <RecruiterVideoProfilePanel candidate={c} />
           <section className="r-card">
             <h2>Recruiter notes</h2>
             {can("candidates.notes.write") && (

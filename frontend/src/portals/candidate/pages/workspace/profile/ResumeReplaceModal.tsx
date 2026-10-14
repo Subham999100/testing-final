@@ -59,9 +59,13 @@ export const ResumeReplaceModal: React.FC<ResumeReplaceModalProps> = ({ isOpen, 
 
       await candidateApi.upload('/candidate/profile/resume', formData);
       toast.success('Resume uploaded and parsed successfully.');
-      await queryClient.invalidateQueries({ queryKey: candidateQueryKeys.resume });
-      await queryClient.invalidateQueries({ queryKey: candidateQueryKeys.profile });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: candidateQueryKeys.resume }),
+        queryClient.invalidateQueries({ queryKey: candidateQueryKeys.profile }),
+        queryClient.invalidateQueries({ queryKey: candidateQueryKeys.me }),
+      ]);
       onClose();
+
     } catch (err: any) {
       setErrorMsg(err?.message || 'Failed to upload resume. Please try again.');
     } finally {

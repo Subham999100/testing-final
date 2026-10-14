@@ -98,80 +98,92 @@ export const ResumePage: React.FC = () => {
     }
   };
 
-  if (isLoading) return <PageSkeleton />;
-
   if (isError) {
     return (
-      <div className="bg-white border border-red-200 rounded-xl p-8 text-center space-y-4 max-w-xl mx-auto my-12">
+      <div className="bg-white border border-red-200 rounded-2xl p-8 text-center space-y-4 max-w-xl mx-auto my-12 shadow-xs">
         <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
           <AlertCircle className="w-6 h-6" />
         </div>
-        <h3 className="text-lg font-semibold text-slate-800">Unable to load resume</h3>
-        <p className="text-sm text-slate-500 max-w-sm mx-auto">
+        <h3 className="text-lg font-semibold text-[#1B1A17]">Unable to load resume</h3>
+        <p className="text-sm text-[#5C564E] max-w-sm mx-auto">
           {(error as any)?.message || 'A network error occurred while connecting to the resume vault.'}
         </p>
-        <Button onClick={() => refetch()} variant="secondary">
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#C2410C] hover:bg-[#9A3412] text-white text-xs font-semibold shadow-xs transition-colors"
+        >
           Retry
-        </Button>
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6 max-w-3xl text-[#1B1A17] font-sans">
       {/* Onboarding Banner */}
       {isOnboarding && (
-        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="bg-[#FFF1E6] border border-[#E8DFD4] rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <span className="inline-block text-xs font-bold uppercase tracking-wider text-orange-700 bg-orange-100 px-2 py-0.5 rounded">
+            <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-[#C2410C] bg-white px-2 py-0.5 rounded-lg border border-[#E8DFD4]">
               Welcome Onboard
             </span>
-            <h2 className="text-base font-bold text-slate-900">Upload your resume to complete profile setup</h2>
-            <p className="text-xs text-slate-600">
+            <h2 className="text-base font-bold text-[#1B1A17]">Upload your resume to complete profile setup</h2>
+            <p className="text-xs text-[#5C564E]">
               Having an active resume lets you apply to any open position in just one click.
             </p>
           </div>
-          <Button
-            variant="secondary"
+          <button
+            type="button"
             onClick={handleProceed}
-            className="text-xs whitespace-nowrap text-slate-600 hover:text-slate-900 font-semibold"
+            className="text-xs whitespace-nowrap text-[#5C564E] hover:text-[#1B1A17] font-semibold px-3 py-1.5 rounded-xl border border-[#E8DFD4] bg-white hover:bg-[#FAF6F1] transition-colors"
           >
             Skip for now
-          </Button>
+          </button>
         </div>
       )}
 
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Manage Resume</h1>
-          <p className="text-sm text-slate-500 mt-1">Upload your resume to apply for open roles with a single click.</p>
+          <h1 className="text-2xl font-serif font-bold text-[#1B1A17]">Manage Resume</h1>
+          <p className="text-sm text-[#5C564E] mt-1">Upload your resume to apply for open roles with a single click.</p>
         </div>
 
         {resume?.hasResume && (isOnboarding || nextUrl) && (
-          <Button
-            variant="primary"
+          <button
+            type="button"
             onClick={handleProceed}
-            className="bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs flex items-center gap-1.5 px-4 py-2 rounded-lg shadow-sm"
+            className="bg-[#C2410C] hover:bg-[#9A3412] text-white font-semibold text-xs flex items-center gap-1.5 px-4 py-2 rounded-xl shadow-xs transition-colors"
           >
             <span>{nextUrl ? 'Continue to Job' : 'Go to Dashboard'}</span>
             <ArrowRight className="w-4 h-4" />
-          </Button>
+          </button>
         )}
       </div>
 
-      {resume?.hasResume ? (
-        <div className="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 space-y-6 shadow-sm">
+      {isLoading ? (
+        <div className="bg-white border border-[#E8DFD4] rounded-2xl p-8 space-y-4 animate-pulse shadow-xs">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-[#FAF6F1] rounded-xl" />
+            <div className="space-y-2 flex-1">
+              <div className="h-5 w-48 bg-[#FAF6F1] rounded" />
+              <div className="h-3 w-32 bg-[#FAF6F1] rounded" />
+            </div>
+          </div>
+        </div>
+      ) : resume?.hasResume ? (
+        <div className="bg-white border border-[#E8DFD4] rounded-2xl p-6 sm:p-8 space-y-6 shadow-xs">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center text-orange-600">
+              <div className="w-12 h-12 rounded-xl bg-[#FFF1E6] border border-[#E8DFD4] flex items-center justify-center text-[#C2410C]">
                 <FileText className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="font-semibold text-base text-slate-900">{resume.fileName}</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <h3 className="font-semibold text-base text-[#1B1A17]">{resume.fileName}</h3>
+                <p className="text-xs text-[#5C564E] mt-0.5">
                   {formatBytes(resume.fileSize)} • Uploaded {formatDate(resume.uploadedAt)}
                 </p>
-                <span className="inline-flex items-center gap-1 mt-2 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded font-medium">
+                <span className="inline-flex items-center gap-1 mt-2 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-medium">
                   <CheckCircle2 className="w-3 h-3" />
                   Active Resume
                 </span>
@@ -179,18 +191,18 @@ export const ResumePage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
+              <button
+                type="button"
                 onClick={handleDownload}
-                className="flex items-center gap-1.5 text-xs"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-[#E8DFD4] bg-white hover:bg-[#FAF6F1] text-[#1B1A17] transition-colors"
               >
                 <Download className="w-3.5 h-3.5" />
                 Download
-              </Button>
+              </button>
               <button
                 type="button"
                 onClick={() => setDeleteConfirmOpen(true)}
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#DC2626] hover:bg-red-700 active:bg-red-800 text-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 transition-colors cursor-pointer"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-[#DC2626] hover:bg-red-700 active:bg-red-800 text-white shadow-xs transition-colors cursor-pointer"
                 aria-label="Delete resume"
               >
                 <Trash2 className="w-3.5 h-3.5 text-white" />
@@ -199,39 +211,39 @@ export const ResumePage: React.FC = () => {
             </div>
           </div>
 
-          <div className="pt-6 border-t border-slate-100 flex items-center justify-between">
-            <p className="text-xs text-slate-500">Need to update your resume?</p>
-            <Button
-              variant="secondary"
+          <div className="pt-6 border-t border-[#FAF6F1] flex items-center justify-between">
+            <p className="text-xs text-[#5C564E]">Need to update your resume?</p>
+            <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="text-xs"
+              className="text-xs font-semibold px-3 py-1.5 rounded-xl border border-[#E8DFD4] bg-white hover:bg-[#FAF6F1] text-[#1B1A17] transition-colors"
             >
               Replace Resume
-            </Button>
+            </button>
           </div>
         </div>
       ) : (
-        <div className="bg-white border-2 border-dashed border-slate-300 rounded-2xl p-10 text-center space-y-4 hover:border-orange-500 transition-colors">
-          <div className="w-14 h-14 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center mx-auto">
+        <div className="bg-white border-2 border-dashed border-[#E8DFD4] rounded-2xl p-10 text-center space-y-4 hover:border-[#C2410C] transition-colors shadow-xs">
+          <div className="w-14 h-14 bg-[#FFF1E6] text-[#C2410C] rounded-2xl flex items-center justify-center mx-auto">
             <UploadCloud className="w-7 h-7" />
           </div>
           <div>
-            <h3 className="text-base font-semibold text-slate-900">Upload your resume</h3>
-            <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+            <h3 className="text-base font-semibold text-[#1B1A17]">Upload your resume</h3>
+            <p className="text-xs text-[#5C564E] mt-1 max-w-sm mx-auto">
               Supports PDF, DOC, DOCX or TXT files up to 10MB. Stored securely in your private candidate vault.
             </p>
           </div>
 
           <div>
-            <Button
-              variant="primary"
+            <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="bg-orange-600 hover:bg-orange-700 text-white font-semibold text-sm px-6 py-2.5 rounded-lg"
+              className="bg-[#C2410C] hover:bg-[#9A3412] text-white font-semibold text-xs px-6 py-2.5 rounded-xl shadow-xs transition-colors"
             >
               {uploading ? `Uploading (${uploadProgress}%)...` : 'Browse File'}
-            </Button>
+            </button>
           </div>
         </div>
       )}

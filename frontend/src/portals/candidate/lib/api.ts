@@ -5,7 +5,7 @@
 // ============================================================
 
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
-import { ApiError } from './types';
+import { ApiError, CandidateNotification, CandidateSavedJob, CandidateFullProfile } from './types';
 
 export const CANDIDATE_TOKEN_KEY = 'clyptus_candidate_token';
 
@@ -48,6 +48,10 @@ candidateAxios.interceptors.request.use((config) => {
   const token = getCandidateToken();
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  // When posting FormData, remove Content-Type so browser sets multipart boundary automatically
+  if (config.data instanceof FormData && config.headers) {
+    delete config.headers['Content-Type'];
   }
   return config;
 });
@@ -132,9 +136,6 @@ export const candidateApi = {
 
   async upload<T>(url: string, formData: FormData, onProgress?: (percent: number) => void): Promise<T> {
     const res = (await candidateAxios.post(url, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
       onUploadProgress: (progressEvent) => {
         if (progressEvent.total && onProgress) {
           const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -167,7 +168,7 @@ export const candidateApi = {
 
   async uploadPhoto(file: Blob | File): Promise<{ photoUrl: string }> {
     const formData = new FormData();
-    formData.append('photo', file, 'photo.webp');
+    formData.append('avatar', file, 'avatar.webp');
     return candidateApi.upload<{ photoUrl: string }>('/candidate/profile/photo', formData);
   },
 
@@ -188,5 +189,216 @@ export const candidateApi = {
   async updateProfile<T = any>(data: any): Promise<T> {
     return candidateApi.patch<T>('/candidate/profile', data);
   },
+
+  async getVideoProfile<T = any>(): Promise<T> {
+    return candidateApi.get<T>('/candidate/video-profile');
+  },
+
+  async uploadVideoProfile<T = any>(
+    file: Blob | File,
+    consent: boolean,
+    durationSeconds?: number,
+    onUploadProgress?: (progressEvent: any) => void,
+  ): Promise<T> {
+    const videoFile =
+      file instanceof File
+        ? file
+        : new File([file], 'video-profile.webm', { type: file.type || 'video/webm' });
+
+    const formData = new FormData();
+    formData.append('video', videoFile, videoFile.name || 'video-profile.webm');
+    formData.append('consent', String(consent));
+    formData.append('consentGiven', String(consent));
+    if (durationSeconds != null) {
+      formData.append('durationSeconds', String(durationSeconds));
+      formData.append('clientDurationSeconds', String(durationSeconds));
+    }
+
+    return candidateAxios.post('/candidate/video-profile', formData, {
+      onUploadProgress,
+      timeout: 120000,
+    }) as Promise<T>;
+  },
+
+  async deleteVideoProfile<T = any>(): Promise<T> {
+    return candidateApi.delete<T>('/candidate/video-profile');
+  },
+
+  // ============================================================
+  // TYPED MOCK DATA LAYER (Backed by localStorage for instant swap)
+  // ============================================================
+
+  // 1. SAVED JOBS
+  async getSavedJobs(): Promise<CandidateSavedJob[]> {
+    try {
+      const raw = localStorage.getItem('clyptus_candidate_saved_jobs');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  async toggleSaveJob(job: {
+    id: string;
+    title: string;
+    companyName: string;
+    location: string;
+    workMode: string;
+    salaryMin?: number;
+    salaryMax?: number;
+    department?: string;
+  }): Promise<{ saved: boolean; jobs: CandidateSavedJob[] }> {
+    try {
+      const current = await candidateApi.getSavedJobs();
+      const exists = current.some((j) => j.jobId === job.id);
+      let updated: CandidateSavedJob[];
+      if (exists) {
+        updated = current.filter((j) => j.jobId !== job.id);
+      } else {
+        const newSaved: CandidateSavedJob = {
+          id: `saved-${Date.now()}`,
+          jobId: job.id,
+          title: job.title,
+          companyName: job.companyName,
+          location: job.location,
+          workMode: job.workMode,
+          salaryMin: job.salaryMin,
+          salaryMax: job.salaryMax,
+          savedAt: new Date().toISOString(),
+          department: job.department,
+        };
+        updated = [newSaved, ...current];
+      }
+      localStorage.setItem('clyptus_candidate_saved_jobs', JSON.stringify(updated));
+      return { saved: !exists, jobs: updated };
+    } catch {
+      return { saved: false, jobs: [] };
+    }
+  },
+
+  async isJobSaved(jobId: string): Promise<boolean> {
+    const jobs = await candidateApi.getSavedJobs();
+    return jobs.some((j) => j.jobId === jobId);
+  },
+
+  // 2. NOTIFICATIONS
+  async getNotifications(): Promise<CandidateNotification[]> {
+    try {
+      const raw = localStorage.getItem('clyptus_candidate_notifications');
+      if (raw) return JSON.parse(raw);
+      // Seed default initial notifications
+      const defaults: CandidateNotification[] = [
+        {
+          id: 'notif-1',
+          title: 'Application Shortlisted',
+          message: 'Your application for Senior Frontend Engineer was shortlisted by Acme Corp.',
+          type: 'APPLICATION_STATUS',
+          read: false,
+          createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+          link: '/candidate/applications',
+        },
+        {
+          id: 'notif-2',
+          title: 'AI Video Profile Recommendation',
+          message: 'Add an interactive AI Video Profile to increase interview requests by up to 3x.',
+          type: 'PROFILE_TIP',
+          read: false,
+          createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
+          link: '/candidate/profile',
+        },
+        {
+          id: 'notif-3',
+          title: 'New Job Matches',
+          message: '3 new jobs match your preferences in Bengaluru (Remote / Hybrid).',
+          type: 'JOB_RECOMMENDATION',
+          read: true,
+          createdAt: new Date(Date.now() - 3600000 * 48).toISOString(),
+          link: '/jobs',
+        },
+      ];
+      localStorage.setItem('clyptus_candidate_notifications', JSON.stringify(defaults));
+      return defaults;
+    } catch {
+      return [];
+    }
+  },
+
+  async markNotificationRead(id: string): Promise<CandidateNotification[]> {
+    try {
+      const list = await candidateApi.getNotifications();
+      const updated = list.map((n) => (n.id === id ? { ...n, read: true } : n));
+      localStorage.setItem('clyptus_candidate_notifications', JSON.stringify(updated));
+      return updated;
+    } catch {
+      return [];
+    }
+  },
+
+  async markAllNotificationsRead(): Promise<CandidateNotification[]> {
+    try {
+      const list = await candidateApi.getNotifications();
+      const updated = list.map((n) => ({ ...n, read: true }));
+      localStorage.setItem('clyptus_candidate_notifications', JSON.stringify(updated));
+      return updated;
+    } catch {
+      return [];
+    }
+  },
+
+  // 3. SHARE PROFILE TOKEN & PUBLIC VIEW
+  async getShareProfileConfig(): Promise<{ enabled: boolean; token: string }> {
+    try {
+      const raw = localStorage.getItem('clyptus_candidate_share_config');
+      if (raw) return JSON.parse(raw);
+      const generated = {
+        enabled: false,
+        token: Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 8),
+      };
+      localStorage.setItem('clyptus_candidate_share_config', JSON.stringify(generated));
+      return generated;
+    } catch {
+      return { enabled: false, token: 'public-preview' };
+    }
+  },
+
+  async toggleShareProfile(enabled: boolean): Promise<{ enabled: boolean; token: string }> {
+    const config = await candidateApi.getShareProfileConfig();
+    const updated = { ...config, enabled };
+    localStorage.setItem('clyptus_candidate_share_config', JSON.stringify(updated));
+    return updated;
+  },
+
+  async regenerateShareProfileToken(): Promise<{ enabled: boolean; token: string }> {
+    const newToken = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 8);
+    const updated = { enabled: true, token: newToken };
+    localStorage.setItem('clyptus_candidate_share_config', JSON.stringify(updated));
+    return updated;
+  },
+
+  // 4. APPLICATION WITHDRAW
+  async withdrawApplication(applicationId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const raw = localStorage.getItem('clyptus_candidate_withdrawn_apps');
+      const withdrawn: string[] = raw ? JSON.parse(raw) : [];
+      if (!withdrawn.includes(applicationId)) {
+        withdrawn.push(applicationId);
+        localStorage.setItem('clyptus_candidate_withdrawn_apps', JSON.stringify(withdrawn));
+      }
+      return { success: true, message: 'Application withdrawn successfully.' };
+    } catch {
+      return { success: true, message: 'Application withdrawn.' };
+    }
+  },
+
+  getWithdrawnApplicationIds(): string[] {
+    try {
+      const raw = localStorage.getItem('clyptus_candidate_withdrawn_apps');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  },
 };
+
+
 

@@ -474,13 +474,35 @@ export class RecruiterService {
       !can(ctx, "applications.read.assigned")
     )
       candidate.applications = [];
-    const [professional, viewers] = await Promise.all([
+    const [professional, viewers, candProf] = await Promise.all([
       this.prisma.recruiterProfile.findUnique({ where: { candidateId: id } }),
       this.prisma.recruiterVisit.count({
         where: { candidateId: id, organisationId: ctx.organisationId },
       }),
+      candidate.userId
+        ? this.prisma.candidateProfile.findUnique({
+            where: { userId: candidate.userId },
+            include: { videoProfile: true },
+          })
+        : Promise.resolve(null),
     ]);
-    return { ...candidate, professional, viewers };
+
+    let videoProfile: any = null;
+    if (candProf?.videoProfile) {
+      videoProfile = {
+        id: candProf.videoProfile.id,
+        hasVideo: true,
+        durationSeconds: candProf.videoProfile.durationSeconds,
+        sizeBytes: candProf.videoProfile.sizeBytes,
+        mimeType: candProf.videoProfile.mimeType,
+        analysisStatus: candProf.videoProfile.analysisStatus,
+        createdAt: candProf.videoProfile.createdAt,
+        hasThumbnail: !!candProf.videoProfile.thumbnailKey,
+        streamUrl: `/api/v1/recruiter/candidates/${id}/video-profile/stream`,
+      };
+    }
+
+    return { ...candidate, professional, viewers, videoProfile };
   }
   async updateProfile(
     ctx: OrgContext,

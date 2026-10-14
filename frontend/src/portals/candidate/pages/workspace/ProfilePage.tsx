@@ -22,6 +22,7 @@ import { LanguagesSection } from './profile/sections/LanguagesSection';
 import { JobPreferencesSection } from './profile/sections/JobPreferencesSection';
 import { LinksSection } from './profile/sections/LinksSection';
 import { PrivacySection } from './profile/sections/PrivacySection';
+import { VideoProfileSection } from './profile/sections/VideoProfileSection';
 import { RightRail } from './profile/RightRail';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
@@ -162,6 +163,11 @@ export const ProfilePage: React.FC = () => {
           {/* 10. Privacy */}
           <div>
             <PrivacySection profile={profile} />
+          </div>
+
+          {/* 11. AI Video Options (Bottom of Profile) */}
+          <div>
+            <VideoProfileSection profile={profile} />
           </div>
         </main>
 

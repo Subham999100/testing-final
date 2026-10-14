@@ -202,3 +202,35 @@ export function inrToWords(amount: number | null | undefined): string {
 
   return parts.length > 0 ? `${parts.join(' ')} Rupees per year` : '';
 }
+
+export const COUNTRY_CODES = [
+  { code: '+91', country: 'India', flag: '🇮🇳' },
+  { code: '+1', country: 'USA / Canada', flag: '🇺🇸' },
+  { code: '+44', country: 'United Kingdom', flag: '🇬🇧' },
+  { code: '+971', country: 'UAE', flag: '🇦🇪' },
+  { code: '+65', country: 'Singapore', flag: '🇸🇬' },
+  { code: '+61', country: 'Australia', flag: '🇦🇺' },
+  { code: '+49', country: 'Germany', flag: '🇩🇪' },
+  { code: '+33', country: 'France', flag: '🇫🇷' },
+  { code: '+353', country: 'Ireland', flag: '🇮🇪' },
+  { code: '+81', country: 'Japan', flag: '🇯🇵' },
+  { code: '+82', country: 'South Korea', flag: '🇰🇷' },
+  { code: '+60', country: 'Malaysia', flag: '🇲🇾' },
+] as const;
+
+export const WORK_AUTHORIZATION_OPTIONS = [
+  'Citizen / Permanent Resident (India)',
+  'Requires Visa Sponsorship',
+  'Authorized in USA (Citizen / Green Card / EAD)',
+  'Authorized in UK / EU',
+  'Authorized in UAE / GCC',
+  'Open to Remote / Global Work Authorization',
+] as const;
+
+export const SKILL_PROFICIENCY_LEVELS = [
+  'Beginner',
+  'Intermediate',
+  'Advanced',
+  'Expert',
+] as const;
+

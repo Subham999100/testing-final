@@ -81,6 +81,8 @@ export interface CandidateProfileResponse {
   onboardingStatus: string;
   onboardingStep: number;
   videoInterviewStatus: string;
+  videoMode?: string;
+  videoProfile?: any;
   completionScore: number;
   completionBreakdown: any;
   visibleToRecruiters: boolean;
@@ -110,7 +112,11 @@ export class CandidateProfileService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: actor.userId },
-      include: { candidateProfile: true },
+      include: {
+        candidateProfile: {
+          include: { videoProfile: true },
+        },
+      },
     });
 
     if (!user || user.role !== UserRole.CANDIDATE) {
@@ -124,6 +130,7 @@ export class CandidateProfileService {
         data: {
           userId: user.id,
         },
+        include: { videoProfile: true },
       });
     }
 
@@ -357,6 +364,7 @@ export class CandidateProfileService {
     const updatedProfile = await this.prisma.candidateProfile.update({
       where: { id: profile.id },
       data: updateData,
+      include: { videoProfile: true },
     });
 
     console.log(
@@ -496,6 +504,8 @@ export class CandidateProfileService {
       onboardingStatus: profile.onboardingStatus,
       onboardingStep: profile.onboardingStep,
       videoInterviewStatus: profile.videoInterviewStatus,
+      videoMode: profile.videoMode || 'NONE',
+      videoProfile: profile.videoProfile || null,
       completionScore: scoreResult.score,
       completionBreakdown: scoreResult.breakdown,
       visibleToRecruiters: profile.visibleToRecruiters ?? false,

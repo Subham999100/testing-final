@@ -11,6 +11,7 @@ export const candidateQueryKeys = {
   resume: ['candidate', 'resume'] as const,
   onboarding: ['candidate', 'onboarding'] as const,
   parseStatus: ['candidate', 'resume', 'parseStatus'] as const,
+  videoProfile: ['candidate', 'videoProfile'] as const,
 
   jobs: {
     all: ['candidate', 'jobs'] as const,
@@ -23,4 +24,10 @@ export const candidateQueryKeys = {
     list: ['candidate', 'applications', 'list'] as const,
     detail: (id: string) => ['candidate', 'applications', 'detail', id] as const,
   },
+
+  savedJobs: ['candidate', 'savedJobs'] as const,
+  notifications: ['candidate', 'notifications'] as const,
+  shareProfile: ['candidate', 'shareProfile'] as const,
+  publicProfile: (token: string) => ['candidate', 'publicProfile', token] as const,
 };
+

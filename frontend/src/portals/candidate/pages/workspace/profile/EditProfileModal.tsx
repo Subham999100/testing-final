@@ -10,7 +10,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Modal } from '../../../components/Modal';
-import { INDIAN_CITIES } from '../../../lib/constants';
+import { INDIAN_CITIES, COUNTRY_CODES } from '../../../lib/constants';
 import { splitFullName } from '../../../lib/name.util';
 import { CandidateFullProfile } from '../../../lib/types';
 import { useProfileSectionUpdate } from './hooks/useProfileSectionUpdate';
@@ -36,12 +36,11 @@ const profileSchema = z.object({
     .max(120, 'Headline must not exceed 120 characters'),
   city: z
     .string()
-    .refine((val) => INDIAN_CITIES.includes(val), {
-      message: 'Please select a valid city from the list',
-    }),
+    .min(2, 'Please select or enter a valid city name'),
   phone: z
     .string()
-    .regex(/^[6-9]\d{9}$/, 'Please enter a valid 10-digit Indian phone number (starting with 6-9)'),
+    .min(6, 'Please enter a valid phone number (at least 6 digits)')
+    .max(15, 'Phone number must not exceed 15 digits'),
   openToWork: z.boolean(),
 });
 
@@ -62,6 +61,16 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   const [citySearch, setCitySearch] = useState(profile.location || '');
   const [cityFocused, setCityFocused] = useState(false);
 
+  // Extract phone country code or fallback to +91
+  const existingCode = COUNTRY_CODES.find((c) => profile.phone?.startsWith(c.code))?.code || '+91';
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string>(
+    profile.phoneCountryCode || existingCode,
+  );
+
+  const rawPhone = profile.phone
+    ? profile.phone.replace(new RegExp(`^\\${selectedCountryCode}`), '').replace(/^\+91/, '').trim()
+    : '';
+
   const {
     register,
     handleSubmit,
@@ -75,21 +84,24 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       fullName: profile.fullName || `${profile.firstName || ''} ${profile.lastName || ''}`.trim(),
       headline: profile.headline || '',
       city: profile.location || '',
-      phone: profile.phone ? profile.phone.replace(/^\+91/, '').trim() : '',
+      phone: rawPhone,
       openToWork: Boolean(profile.openToWork),
     },
   });
 
   const selectedCity = watch('city');
 
-  const filteredCities = INDIAN_CITIES.filter((city) =>
+  const cityOptions = [...INDIAN_CITIES, 'Other / International'];
+  const filteredCities = cityOptions.filter((city) =>
     city.toLowerCase().includes(citySearch.toLowerCase()),
   );
 
   const onSubmit = async (values: ProfileFormValues) => {
     const { firstName, lastName } = splitFullName(values.fullName);
     const normalizedHeadline = toTitleCase(values.headline);
-    const normalizedCity = toTitleCase(values.city);
+    const normalizedCity = values.city === 'Other / International'
+      ? toTitleCase(citySearch !== 'Other / International' ? citySearch : 'International')
+      : toTitleCase(values.city);
 
     await updateMutation.mutateAsync({
       firstName,
@@ -97,7 +109,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       fullName: values.fullName.trim(),
       headline: normalizedHeadline,
       location: normalizedCity,
-      phone: values.phone ? `+91${values.phone}` : undefined,
+      phone: values.phone ? `${selectedCountryCode}${values.phone}` : undefined,
+      phoneCountryCode: selectedCountryCode,
       openToWork: values.openToWork,
     });
 
@@ -220,19 +233,28 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
           )}
         </div>
 
-        {/* Phone Number (+91, 10-digit) */}
+        {/* Phone Number with Country Code Dropdown */}
         <div>
           <label htmlFor="phone" className="block text-xs font-semibold text-[#1B1A17] mb-1.5">
             Phone Number <span className="text-[#DC2626]">*</span>
           </label>
-          <div className="flex rounded-xl border border-[#E8DFD4] overflow-hidden focus-within:ring-2 focus-within:ring-[#C2410C]/20">
-            <span className="px-3.5 py-2.5 bg-[#FAF6F1] text-xs font-semibold text-[#5C564E] border-r border-[#E8DFD4] flex items-center select-none">
-              +91
-            </span>
+          <div className="flex rounded-xl border border-[#E8DFD4] overflow-hidden focus-within:ring-2 focus-within:ring-[#C2410C]/20 bg-white">
+            <select
+              value={selectedCountryCode}
+              onChange={(e) => setSelectedCountryCode(e.target.value)}
+              aria-label="Country code"
+              className="px-2.5 py-2.5 bg-[#FAF6F1] text-xs font-semibold text-[#1B1A17] border-r border-[#E8DFD4] focus:outline-none cursor-pointer hover:bg-[#F2E9E0] transition-colors max-w-[130px] sm:max-w-[160px] truncate"
+            >
+              {COUNTRY_CODES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.flag} {c.code} ({c.country})
+                </option>
+              ))}
+            </select>
             <input
               id="phone"
               type="tel"
-              maxLength={10}
+              maxLength={15}
               {...register('phone')}
               aria-invalid={Boolean(errors.phone)}
               aria-describedby={errors.phone ? 'phone-error' : undefined}

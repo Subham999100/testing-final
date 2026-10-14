@@ -87,6 +87,17 @@ export interface TalentDetail extends TalentCard {
     job: { id: string; title: string; status: string };
   }[];
   notes: { id: string; body: string; author: string; createdAt: string }[];
+  videoProfile?: {
+    id: string;
+    hasVideo: boolean;
+    durationSeconds: number;
+    sizeBytes: number;
+    mimeType: string;
+    analysisStatus: string;
+    createdAt: string;
+    hasThumbnail: boolean;
+    streamUrl: string;
+  } | null;
 }
 export interface Folder {
   id: string;

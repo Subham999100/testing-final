@@ -1244,6 +1244,8 @@ model CandidateProfile {
   onboardingStatus     OnboardingStatus     @default(NOT_STARTED)
   onboardingStep       Int                  @default(1)
   videoInterviewStatus VideoInterviewStatus @default(NOT_STARTED)
+  videoMode            CandidateVideoMode   @default(NONE)
+  videoProfile         VideoProfile?
   completionScore      Int                  @default(0)
   completionBreakdown  Json?                @default("{}")
   visibleToRecruiters  Boolean              @default(false)
@@ -1256,6 +1258,46 @@ model CandidateProfile {
   @@index([skills], type: Gin)
   @@index([onboardingStatus])
   @@map("candidate_profiles")
+}
+
+enum CandidateVideoMode {
+  NONE
+  PROFILE
+  INTERVIEW
+}
+
+enum VideoAnalysisStatus {
+  NOT_STARTED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model VideoProfile {
+  id                 String              @id @default(uuid())
+  candidateProfileId String              @unique
+  storageKey         String
+  mimeType           String
+  durationSeconds    Float
+  sizeBytes          Int
+  thumbnailKey       String?
+  consentGivenAt     DateTime?
+  analysisStatus     VideoAnalysisStatus @default(NOT_STARTED)
+  transcript         String?             @db.Text
+  fluencyScore       Float?
+  communicationScore Float?
+  grammarScore       Float?
+  metrics            Json?               @default("{}")
+  analysisSummary    Json?               @default("{}")
+  snapshotKeys       String[]            @default([])
+  reportPdfKey       String?
+  analyzedAt         DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  candidateProfile   CandidateProfile    @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+
+  @@map("candidate_video_profiles")
 }
 
 

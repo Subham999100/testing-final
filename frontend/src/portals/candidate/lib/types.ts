@@ -18,6 +18,48 @@ export type ApplicationStage =
 export type WorkMode = 'Remote' | 'Hybrid' | 'On-site';
 export type EmploymentType = 'Full-time' | 'Contract' | 'Part-time' | 'Internship' | 'Temporary';
 
+export type SkillProficiency = 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
+
+export interface StructuredSkillItem {
+  name: string;
+  level?: SkillProficiency;
+  years?: number;
+}
+
+export type CandidateSkillItem = string | StructuredSkillItem;
+
+export interface CandidateNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'APPLICATION_STATUS' | 'INTERVIEW_INVITE' | 'JOB_RECOMMENDATION' | 'PROFILE_TIP' | 'SYSTEM';
+  read: boolean;
+  createdAt: string;
+  link?: string;
+}
+
+export interface CandidateSavedJob {
+  id: string;
+  jobId: string;
+  title: string;
+  companyName: string;
+  location: string;
+  workMode: string;
+  salaryMin?: number;
+  salaryMax?: number;
+  salaryCurrency?: string;
+  savedAt: string;
+  department?: string;
+}
+
+export interface ApplicationTimelineEvent {
+  stage: ApplicationStage;
+  label: string;
+  completedAt?: string;
+  current?: boolean;
+  notes?: string;
+}
+
 export interface CandidateEducationItem {
   id?: string;
   degree?: string;
@@ -151,7 +193,12 @@ export interface CandidateFullProfile {
   preferredLocations?: string[];
   preferredJobTypes?: string[];
   preferredWorkModes?: string[];
-  skills: string[];
+  targetRoles?: string[];
+  willingToRelocate?: boolean;
+  workAuthorization?: string;
+  publicProfileEnabled?: boolean;
+  publicProfileToken?: string;
+  skills: Array<string | StructuredSkillItem>;
   bio: string | null;
   education: CandidateEducationItem[];
   experience: CandidateExperienceItem[];
@@ -163,6 +210,8 @@ export interface CandidateFullProfile {
   onboardingStatus?: OnboardingStatus;
   onboardingStep?: number;
   videoInterviewStatus?: VideoInterviewStatus;
+  videoMode?: 'NONE' | 'PROFILE' | 'INTERVIEW';
+  videoProfile?: any;
   completionScore?: number;
   completionBreakdown?: Record<string, CompletionSectionScore>;
   visibleToRecruiters?: boolean;
@@ -170,6 +219,7 @@ export interface CandidateFullProfile {
   createdAt: string;
   updatedAt: string;
 }
+
 
 export interface CandidateUser {
   id: string;
@@ -315,7 +365,12 @@ export interface UpdateCandidateProfileRequest {
   preferredLocations?: string[];
   preferredJobTypes?: string[];
   preferredWorkModes?: string[];
-  skills?: string[];
+  targetRoles?: string[];
+  willingToRelocate?: boolean;
+  workAuthorization?: string;
+  publicProfileEnabled?: boolean;
+  publicProfileToken?: string;
+  skills?: CandidateSkillItem[];
   bio?: string;
   education?: CandidateEducationItem[];
   experience?: CandidateExperienceItem[];
@@ -326,6 +381,7 @@ export interface UpdateCandidateProfileRequest {
   visibleToRecruiters?: boolean;
   blockedOrganisations?: string[];
 }
+
 
 export interface CreateCandidateApplicationRequest {
   jobId: string;

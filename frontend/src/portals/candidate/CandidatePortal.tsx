@@ -22,6 +22,9 @@ import { ApplicationsPage } from './pages/workspace/ApplicationsPage';
 import { ApplicationDetailPage } from './pages/workspace/ApplicationDetailPage';
 import { ProfilePage } from './pages/workspace/ProfilePage';
 import { ResumePage } from './pages/workspace/ResumePage';
+import { SavedJobsPage } from './pages/workspace/SavedJobsPage';
+import { NotificationsPage } from './pages/workspace/NotificationsPage';
+import { PublicProfilePage } from './pages/public/PublicProfilePage';
 import { PageSkeleton } from '@/portals/org/ui/ui';
 
 export default function CandidatePortal() {
@@ -39,6 +42,10 @@ export default function CandidatePortal() {
           <Route path="register" element={<RegisterPage />} />
         </Route>
 
+        {/* Public Shareable Candidate Profile */}
+        <Route path="candidate/p/:token" element={<PublicProfilePage />} />
+        <Route path="p/:token" element={<PublicProfilePage />} />
+
         {/* Candidate 5-Step Onboarding */}
         <Route path="onboarding" element={<OnboardingPage />} />
 
@@ -53,9 +60,12 @@ export default function CandidatePortal() {
         >
           <Route index element={<Navigate to="/candidate/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="saved-jobs" element={<SavedJobsPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
           <Route path="applications" element={<ApplicationsPage />} />
           <Route path="applications/:id" element={<ApplicationDetailPage />} />
           <Route path="profile" element={<ProfilePage />} />
+          <Route path="profile/preview" element={<PublicProfilePage />} />
           <Route path="resume" element={<ResumePage />} />
         </Route>
 

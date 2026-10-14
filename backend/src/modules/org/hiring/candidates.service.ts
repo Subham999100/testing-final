@@ -17,6 +17,7 @@ import { CandidateInputDto, CandidateQueryDto, UpdateCandidateDto } from './dto'
 
 export const PUBLIC_CANDIDATE_SELECT = {
   id: true,
+  userId: true,
   firstName: true,
   lastName: true,
   headline: true,
@@ -155,6 +156,7 @@ export class CandidatesService {
 
     return {
       id: c.id,
+      userId: c.userId,
       name: `${c.firstName} ${c.lastName}`,
       firstName: c.firstName,
       lastName: c.lastName,

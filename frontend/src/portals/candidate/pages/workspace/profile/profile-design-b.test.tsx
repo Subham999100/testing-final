@@ -203,6 +203,7 @@ describe('Design B - EditProfileModal (Validation, Dirty Guard, Save)', () => {
     openToWork: true,
     coverUrl: null,
     skills: ['React', 'TypeScript', 'Tailwind CSS'],
+    bio: 'Experienced developer',
     education: [],
     experience: [],
     resume: { hasResume: false, fileName: null, fileSize: null, mimeType: null, uploadedAt: null },
