@@ -1,6 +1,6 @@
 # Clyptus Platform Super Admin Documentation
 
-Welcome to the documentation for the **Platform Super Admin** module of the Clyptus Multi-Organisation Job Portal Platform.
+Welcome to the documentation for the **Platform Super Admin** module of the Clyptus Multi-Organisation Job Portal Platform..
 
 ---
 
