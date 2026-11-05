@@ -273,6 +273,7 @@ export function Verification() {
                         <td className="py-3 px-4">
                           <div className="text-ink font-medium">{app.ownerName}</div>
                           <div className="text-[11px] text-muted">{app.ownerEmail || app.contactEmail}</div>
+                          <div className="text-[11px] text-muted"></div>
                         </td>
 
                         {/* Plan & Tokens */}

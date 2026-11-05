@@ -21,26 +21,46 @@ export const apiClient: AxiosInstance = axios.create({
 apiClient.interceptors.request.use((config) => {
   const url = config.url || '';
   const isOrgRequest = url.startsWith('/org') || url.startsWith('org');
+  const isPlatformRequest =
+    url.startsWith('/platform') || url.startsWith('platform');
+
   const token = isOrgRequest
     ? sessionStorage.getItem('clyptus_org_token')
-    : getPlatformAccessToken();
+    : isPlatformRequest
+      ? getPlatformAccessToken()
+      : undefined;
 
-  if (token && config.headers) {
+  const existingAuthorization =
+    config.headers?.get?.('Authorization') ??
+    config.headers?.Authorization;
+
+  if (token && config.headers && !existingAuthorization) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  //Form Upload Content-Type Restrictions
+  if (config.data instanceof FormData) {
+    config.headers?.setContentType(false);
+  } 
+
   return config;
 });
 
 apiClient.interceptors.response.use(
-  (response) => response.data,
+  (response) => 
+    response.config.responseType === 'blob'
+    ? response
+    : response.data,
   (error) => {
     const status = error.response?.status;
     const url = error.config?.url || '';
-    const isOrgRequest = url.startsWith('/org') || url.startsWith('org');
+    const isPlatformRequest = url.startsWith('/platform') || url.startsWith('platform');
 
-    if (status === 401 && !isOrgRequest) {
+    if (status === 401 && isPlatformRequest) {
       clearPlatformAccessToken();
-      window.dispatchEvent(new CustomEvent('clyptus:platform-session-expired'));
+      window.dispatchEvent(
+        new CustomEvent('clyptus:platform-session-expired')
+      );
     }
 
     const serverError = error.response?.data?.error;

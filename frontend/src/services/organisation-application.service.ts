@@ -3,6 +3,7 @@
 // Connects frontend with Public and Platform Verification APIs
 // ============================================================
 
+import { string } from 'zod';
 import { apiClient } from './api';
 
 export interface PublicPlan {
@@ -45,13 +46,29 @@ export interface ApplicationSubmissionResult {
   message: string;
 }
 
+export type OrganisationDocumentType =
+  | 'REGISTRATION_CERTIFICATE'
+  | 'TAX_ID'
+  | 'AUTHORIZATION_LETTER'
+  | 'PAYMENT_PROOF'
+  | 'OTHER';
+
+export type OrganisationDocumentReviewStatus =
+  | 'PENDING_REVIEW'
+  | 'VERIFIED'
+  | 'REJECTED';
+
 export interface ApplicationDocumentMetadata {
   id: string;
-  type: 'REGISTRATION_CERTIFICATE' | 'TAX_ID' | 'AUTHORIZATION_LETTER' | 'PAYMENT_PROOF' | 'OTHER';
+  type: OrganisationDocumentType;
   fileName: string;
   fileSize: number;
   mimeType: string;
   createdAt: string;
+  reviewStatus: OrganisationDocumentReviewStatus;
+  // Timestamps
+  reviewedAt: string | null;
+  reviewNotes: string | null;
 }
 
 export interface PublicApplicationStatusResult {
@@ -137,15 +154,51 @@ export const OrganisationApplicationService = {
   },
 
   async submitApplication(payload: CreateOrganisationApplicationPayload): Promise<ApplicationSubmissionResult> {
-    const res: any = await apiClient.post('/public/organisation-applications', payload);
-    return res.data || res;
+    
+    const res: any = await apiClient.post(
+      '/public/organisation-applications', 
+      payload
+    );
+
+    // Handles either an Axios response or the body returned by your interceptor.
+    const body = res?.data ?? res;
+    const payloadData = body?.data ?? body;
+    const application = payloadData?.application ?? payloadData;
+
+    const id =
+      application?.id ??
+      application?.applicationId ??
+      payloadData?.applicationId;
+
+    const continuationToken =
+      application?.continuationToken ??
+      payloadData?.continuationToken ??
+      body?.continuationToken;
+
+    if (typeof id !== 'string' || !id || id === 'undefined') {
+      throw new Error(
+        'Application creation response did not include an application ID.',
+      );
+    }
+
+    if (!continuationToken) {
+      throw new Error(
+        'Application creation response did not include a continuation token.',
+      );
+    }
+
+    return {
+      ...application,
+      id,
+      continuationToken,
+    } as ApplicationSubmissionResult;
   },
 
   async uploadDocument(
     applicationId: string,
     continuationToken: string,
     file: File,
-    type: string,
+    type: OrganisationDocumentType,
   ): Promise<ApplicationDocumentMetadata> {
     const formData = new FormData();
     formData.append('file', file);
@@ -156,7 +209,7 @@ export const OrganisationApplicationService = {
       formData,
       {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Content-Type': 'undefined',
           'Authorization': `Bearer ${continuationToken}`,
           'x-continuation-token': continuationToken,
         },
@@ -188,7 +241,9 @@ export const OrganisationApplicationService = {
     search?: string;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
-  }): Promise<{ data: PlatformApplicationItem[]; meta: { total: number; page: number; limit: number; totalPages: number } }> {
+  }): 
+    Promise<{ data: PlatformApplicationItem[]; 
+    meta: { total: number; page: number; limit: number; totalPages: number } }> {
     const res: any = await apiClient.get('/platform/organisation-applications', { params });
     const rawData = Array.isArray(res) ? res : (res.data || []);
     const mappedData = rawData.map((item: any) => ({
@@ -287,6 +342,22 @@ export const OrganisationApplicationService = {
 
   async requestInformation(id: string, notes: string): Promise<any> {
     const res: any = await apiClient.post(`/platform/organisation-applications/${id}/request-information`, { notes });
+    return res.data || res;
+  },
+
+  async reviewDocument(
+    applicationId: string,
+    documentId: string,
+    payload: {
+      decision: 'VERIFIED' | 'REJECTED';
+      notes?: string;
+    },
+  ): Promise<ApplicationDocumentMetadata>{
+    const res : any = await apiClient.post(
+      `/platform/organisation-applications/${applicationId}/documents/${documentId}/review`,
+      payload
+    );
+
     return res.data || res;
   },
 
