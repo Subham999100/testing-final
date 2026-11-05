@@ -47,4 +47,3 @@ Endpoints:
 - Backend API: http://localhost:3000/api
 - Swagger UI: http://localhost:3000/api
 - Database: localhost:5434
-s

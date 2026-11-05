@@ -163,10 +163,18 @@ export const OrganisationApplicationWizard: React.FC = () => {
   };
 
   // Step 4 Validation (Documents can be uploaded now or later if requested)
-  const validateStep4 = (): boolean => {
-    setError(null);
-    return true;
-  };
+const validateStep4 = (): boolean => {
+  const missing = DOCUMENT_TYPES
+    .filter((docType) => docType.required)
+    .filter((docType) => !stagedFiles.some((file) => file.type === docType.value));
+
+  if (missing.length > 0) {
+    setError(`Please attach: ${missing.map((docType) => docType.label).join(', ')}.`);
+    return false;
+  }
+  setError(null);
+  return true;
+};
 
   const handleNext = () => {
     if (currentStep === 1 && !validateStep1()) return;
@@ -225,16 +233,14 @@ export const OrganisationApplicationWizard: React.FC = () => {
 
     try {
       // 1. Submit Application record to receive applicationId and continuationToken
-      const submission = await OrganisationApplicationService.submitApplication({
-        ...formData,
-        domain: formData.domain ? formData.domain.trim() : undefined,
-        contactPhone: formData.contactPhone ? formData.contactPhone.trim() : undefined,
-        website: formData.website ? formData.website.trim() : undefined,
-        address: formData.address ? formData.address.trim() : undefined,
-        ownerPhone: formData.ownerPhone ? formData.ownerPhone.trim() : undefined,
-        ownerDesignation: formData.ownerDesignation ? formData.ownerDesignation.trim() : undefined,
-        paymentReference: formData.paymentReference ? formData.paymentReference.trim() : undefined,
-      });
+      const submission = await OrganisationApplicationService.submitApplication(formData);
+        // domain: formData.domain ? formData.domain.trim() : undefined,
+        // contactPhone: formData.contactPhone ? formData.contactPhone.trim() : undefined,
+        // website: formData.website ? formData.website.trim() : undefined,
+        // address: formData.address ? formData.address.trim() : undefined,
+        // ownerPhone: formData.ownerPhone ? formData.ownerPhone.trim() : undefined,
+        // ownerDesignation: formData.ownerDesignation ? formData.ownerDesignation.trim() : undefined,
+        // paymentReference: formData.paymentReference ? formData.paymentReference.trim() : undefined,
 
       // 2. Upload Staged Documents sequentially using continuationToken
       for (const item of stagedFiles) {

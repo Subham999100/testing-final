@@ -3,8 +3,8 @@
 // Review and configure organisation setup before atomic provisioning
 // ============================================================
 
-import React, { useState } from 'react';
-import { CheckCircle, Loader2, X, AlertCircle, Shield, Building2, User, Key, CreditCard } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { CheckCircle, Loader2, X, AlertCircle, Shield, Building2, User, Key, CreditCard, EyeIcon , EyeClosedIcon } from 'lucide-react';
 import { OrganisationApplicationService } from '../../../services/organisation-application.service';
 
 interface Props {
@@ -35,11 +35,17 @@ export const ApproveApplicationDialog: React.FC<Props> = ({
   const [name, setName] = useState(organisationName);
   const [slug, setSlug] = useState(initialSlug);
   const [ownerEmail, setOwnerEmail] = useState(initialOwnerEmail);
+  const [ownerPassword, setOwnerPassword] = useState("");
+  const [isPasswordVisible,setIsPasswordVisible] = useState(false); //Set password default visibility = false
   const [recruiterLimit, setRecruiterLimit] = useState<number>(defaultRecruiterLimit);
   const [initialTokens, setInitialTokens] = useState<number>(defaultTokenAllocation);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const togglePasswordVisibility = () => {
+    setIsPasswordVisible(!isPasswordVisible);
+  }
 
   const handleApprove = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,6 +144,26 @@ export const ApproveApplicationDialog: React.FC<Props> = ({
                 onChange={(e) => setOwnerEmail(e.target.value)}
                 className="w-full px-2.5 py-1.5 bg-surface border border-line rounded font-mono text-ink focus:outline-none focus:border-brand"
               />
+            </div>
+
+            <div>
+              <label className="text-muted block mb-1">Organisation Super Admin Password</label>
+              <div>
+                <input
+                  type = {isPasswordVisible ? "text" : "password"}
+                  required
+                  value={ownerPassword}
+                  onChange={(e) => setOwnerPassword(e.target.value)}
+                  className="w-11/12 px-2.5 py-1.5 bg-surface border border-line rounded font-mono text-ink focus:outline-none focus:border-brand"
+                />
+                <button type='button' onClick={() => togglePasswordVisibility()} className='px-2.5 py-1.5 w-1/12 align-middle'>
+                  {isPasswordVisible ?  
+                    <EyeClosedIcon className='size-4'/>
+                    :
+                    <EyeIcon className='size-4'/>
+                  }
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
